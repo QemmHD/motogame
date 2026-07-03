@@ -9,3 +9,4 @@ sawblade,rotating hazard object,sprite,circular metal sawblade with orange hazar
 spikes,ground hazard object,sprite,row of sharp metal spikes on a base with hazard stripes,1:1 1k keyed,FORMULA,generate
 checkpoint,checkpoint marker,sprite,tall checkpoint flag pole with blue-and-white pennant,2:3 1k keyed,FORMULA,generate
 finish,level finish marker,sprite,black-and-white checkered finish flag on a pole,2:3 1k keyed,FORMULA,generate
+bike_body,wheel-less bike + rider,sprite,detailed red/black motocross dirt bike with helmeted rider on green key (wheels omitted for rigging),3:2 1k keyed,nano_banana_pro,generate+chroma-key
