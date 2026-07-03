@@ -11,7 +11,7 @@ const ASSETS = {
 };
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
-const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: 21, sag: 0.22, dip: 14 };
+const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: 22, sag: 0.22, dip: 18 };
 const IMG = {};
 function loadAssets() {
   return Promise.all(Object.entries(ASSETS).map(([k, f]) => new Promise((res) => {
