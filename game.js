@@ -201,12 +201,12 @@ addEventListener('touchstart', () => { isTouch = true; }, { once: true, passive:
 const levels = buildLevels();
 const G = {
   state: 'loading', levelIdx: 0, level: null, terrain: null, bike: null,
-  cam: { x: 0, y: 0, viewH: 460 }, elapsed: 0, flipBonus: 0, running: false,
-  cpIndex: 0, particles: [], shake: 0, crashTimer: 0, finishTimer: 0,
+  cam: { x: 0, y: 0, viewH: 460, roll: 0, kickX: 0, kickY: 0 }, elapsed: 0, flipBonus: 0, running: false,
+  cpIndex: 0, particles: [], tracks: [], shake: 0, crashTimer: 0, finishTimer: 0,
   popups: [], flash: 0, cpFlash: 0, prevGrounded: true, prevFlipEvent: 0,
   finishStars: 0, finishTime: 0, finishNewRecord: false, slow: 1, hitstop: 0,
   score: 0, combo: 1, comboTimer: 0, airStart: -1, finishScore: 0, finishRecordScore: false,
-  settingsOpen: false,
+  settingsOpen: false, susp: 0, suspVel: 0, trackT: 0,
 };
 
 function startLevel(i) {
@@ -220,7 +220,9 @@ function startLevel(i) {
   G.prevGrounded = true; G.prevFlipEvent = G.bike.flipEventId;
   G.slow = 1; G.hitstop = 0; G.flash = 0;
   G.score = 0; G.combo = 1; G.comboTimer = 0; G.airStart = -1;
-  G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460;
+  G.susp = 0; G.suspVel = 0; G.tracks.length = 0; G.trackT = 0;
+  G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
+  G.prevBikeY = G.bike.y;
   for (const cp of L.course.decos) if (cp.type === 'checkpoint') cp.active = false;
   for (const h of L.course.hazards) { h.spin = 0; h._nm = false; }
   Audio2.setMusicState('drive');
@@ -280,7 +282,9 @@ function simulate(dt) {
     if (!bike.grounded && G.prevGrounded) G.airStart = G.elapsed;
     if (bike.grounded && !G.prevGrounded) {
       const v = Math.abs((bike.rear.y - bike.rear.oy) * 360);
-      if (v > 120) { shakeAdd(Math.min(14, v / 90)); Audio2.land(v); dustBurst(bike.rear.x, bike.rear.y, 8); vib(18); }
+      G.susp = Math.max(G.susp, Math.min(1.05, v / 480)); G.suspVel = Math.min(G.suspVel, 0); // suspension soaks the impact
+      if (v > 120) { shakeAdd(Math.min(14, v / 90)); Audio2.land(v); dustBurst(bike.rear.x, bike.rear.y, 8); vib(18);
+        camKick(0, Math.min(10, v / 90)); if (v > 300) dirtClods(bike.rear.x, bike.rear.y, Math.min(10, v / 120)); }
       if (v > 520 && !reduced()) { G.hitstop = 0.04; G.flash = Math.min(0.4, v / 1600); }
       const air = G.airStart >= 0 ? G.elapsed - G.airStart : 0;
       if (air > 0.62) { scoreEvent(STR.bigAir, '#ffd23e', Math.round(air * 150), bike.x, bike.y - 60); Audio2.stunt(); }
@@ -288,6 +292,11 @@ function simulate(dt) {
     }
     G.prevGrounded = bike.grounded;
     if (bike.grounded && input.gas && bike.speed > 120 && Math.random() < 0.6) dust(bike.rear.x, bike.rear.y, bike.speed);
+    if (bike.grounded && input.gas && Math.random() < 0.25) exhaust(bike);
+    // tire tracks (decal ring buffer)
+    if (bike.grounded && bike.speed > 60) { G.trackT += dt; if (G.trackT > 0.03) { G.trackT = 0;
+      const p = bikePoints(bike); G.tracks.push({ x: p.rear.x, y: p.rear.y + CONFIG.wheelR * 0.7, a: 0.5 });
+      if (G.tracks.length > 220) G.tracks.shift(); } }
 
     updateHazards(dt);
     if (!bike.crashed) scanHazards();
@@ -366,19 +375,44 @@ function confetti() {
     vx: (Math.random() - .5) * 120, vy: 40 + Math.random() * 120, life: 1.5 + Math.random(), max: 2.5,
     size: 5 + Math.random() * 6, type: 'confetti', col: ['#ff5252', '#ffd23e', '#5bd6ff', '#8bff6b', '#ff8ad8'][i % 5] });
 }
+function camKick(x, y) { if (reduced()) return; G.cam.kickX += x; G.cam.kickY += y; }
+function dirtClods(x, y, n) {
+  for (let i = 0; i < n; i++) { const a = -Math.PI * (0.3 + Math.random() * 0.5);
+    G.particles.push({ x, y, vx: -120 - Math.random() * 160, vy: Math.sin(a) * (120 + Math.random() * 160),
+      life: 0.5 + Math.random() * 0.4, max: 0.9, size: 4 + Math.random() * 5, rot: Math.random() * 7, vr: (Math.random() - .5) * 20, type: 'clod' }); }
+}
+function exhaust(b) {
+  const p = bikePoints(b), a = b.angle;
+  G.particles.push({ x: p.rear.x - Math.cos(a) * 26, y: p.rear.y - 8 - Math.sin(a) * 26,
+    vx: -30 - Math.random() * 30, vy: -14 - Math.random() * 12, life: 0.35 + Math.random() * 0.25, max: 0.6, size: 4 + Math.random() * 4, type: 'exhaust' });
+}
 function updateParticles(dt) {
   for (const p of G.particles) {
     p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.type === 'dust') { p.vy += 40 * dt; p.vx *= 0.94; }
     else if (p.type === 'fire' || p.type === 'smoke') { p.vy += 120 * dt; p.vx *= 0.96; }
     else if (p.type === 'confetti') { p.vy += 60 * dt; p.vx += Math.sin(p.y * 0.05) * 6 * dt; }
+    else if (p.type === 'clod') { p.vy += 620 * dt; p.rot += p.vr * dt; }
+    else if (p.type === 'exhaust') { p.vy -= 12 * dt; p.vx *= 0.95; p.size += 20 * dt; }
     p.life -= dt;
   }
   G.particles = G.particles.filter(p => p.life > 0);
   for (const p of G.popups) { p.y += p.vy * dt; p.life -= dt; }
   G.popups = G.popups.filter(p => p.life > 0);
+  for (const t of G.tracks) t.a -= dt * 0.12;
+  if (G.tracks.length && G.tracks[0].a <= 0) G.tracks.shift();
   if (G.cpFlash > 0) G.cpFlash -= dt;
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
+  // suspension render-spring — compression set directly by impacts/bumps, then
+  // relaxes to rest with a firm rebound bounce. Also breathes over rolling bumps.
+  const b = G.bike;
+  if (b && (G.state === 'playing' || G.state === 'crashed')) {
+    const vy = (b.y - (G.prevBikeY == null ? b.y : G.prevBikeY)) / dt; G.prevBikeY = b.y;
+    if (b.grounded && vy > 30) G.susp = Math.max(G.susp, Math.min(0.55, vy / 1200)); // downslopes/bumps
+  }
+  G.suspVel += (-G.susp * 120 - G.suspVel * (G.suspVel > 0 ? 8 : 13)) * dt;
+  G.susp = Math.max(-0.4, Math.min(1.3, G.susp + G.suspVel * dt));
+  G.cam.kickX *= (1 - Math.min(1, dt * 9)); G.cam.kickY *= (1 - Math.min(1, dt * 9));
 }
 
 // ---------------------------------------------------------------- camera ----
@@ -391,6 +425,9 @@ function updateCamera(dt) {
   const k = 1 - Math.pow(0.001, dt);
   G.cam.x += (tx - G.cam.x) * k; G.cam.y += (ty - G.cam.y) * k;
   G.cam.viewH += (tv - G.cam.viewH) * (1 - Math.pow(0.02, dt));
+  // camera roll: lean into flips (clamped), settle level on the ground
+  const tr = (b.airborne && !reduced()) ? Math.max(-0.17, Math.min(0.17, normAngle(b.angle) * 0.32)) : 0;
+  G.cam.roll += (tr - G.cam.roll) * (1 - Math.pow(0.02, dt));
 }
 
 // ---------------------------------------------------------------- render ----
@@ -406,7 +443,8 @@ function worldTransform() {
   const sx = (G.shake > 0) ? (Math.random() - .5) * G.shake : 0;
   const sy = (G.shake > 0) ? (Math.random() - .5) * G.shake : 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.translate(cssW / 2 + sx, cssH * 0.6 + sy);
+  ctx.translate(cssW / 2 + sx + G.cam.kickX, cssH * 0.6 + sy + G.cam.kickY);
+  if (G.cam.roll) ctx.rotate(G.cam.roll);
   ctx.scale(scale, scale);
   ctx.translate(-G.cam.x, -G.cam.y);
   return scale;
@@ -427,8 +465,27 @@ function drawSky() {
     if (flip) { ctx.save(); ctx.translate(x + iw, oy); ctx.scale(-1, 1); ctx.drawImage(im, 0, 0, iw, ih); ctx.restore(); }
     else ctx.drawImage(im, x, oy, iw, ih);
   }
+  drawRidges();
   const g = ctx.createLinearGradient(0, 0, 0, cssH); g.addColorStop(0, 'rgba(255,240,200,0.12)'); g.addColorStop(0.5, 'rgba(255,255,255,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, cssW, cssH);
+}
+// distant hill silhouettes at two parallax speeds — cheap layered depth
+function drawRidges() {
+  if (G.state === 'menu') return;
+  const horizon = cssH * 0.52;
+  const layers = [
+    { sp: 0.10, amp: 34, base: horizon + 34, f: 0.0016, col: 'rgba(120,150,180,0.45)' },
+    { sp: 0.26, amp: 54, base: horizon + 70, f: 0.0023, col: 'rgba(96,120,150,0.5)' },
+  ];
+  for (const L of layers) {
+    ctx.fillStyle = L.col; ctx.beginPath(); ctx.moveTo(0, cssH);
+    for (let sx = 0; sx <= cssW; sx += 14) {
+      const wx = G.cam.x * L.sp + sx;
+      const y = L.base + Math.sin(wx * L.f) * L.amp + Math.sin(wx * L.f * 2.7 + 1.3) * L.amp * 0.35;
+      ctx.lineTo(sx, y);
+    }
+    ctx.lineTo(cssW, cssH); ctx.closePath(); ctx.fill();
+  }
 }
 
 function visibleSlice(pts, left, right) {
@@ -451,6 +508,11 @@ function drawTerrain(scale) {
     ctx.lineTo(pts[i1].x, bottom); ctx.lineTo(pts[i0].x, bottom); ctx.closePath();
     ctx.fillStyle = patRock || '#b98a55'; ctx.fill();
     ctx.fillStyle = 'rgba(60,40,25,0.28)'; ctx.fill();
+    // form shading: warm rim of light at the surface fading to dark depths
+    let top = Infinity; for (let i = i0; i <= i1; i++) if (pts[i].y < top) top = pts[i].y;
+    const grd = ctx.createLinearGradient(0, top - 16, 0, top + 300);
+    grd.addColorStop(0, 'rgba(255,226,170,0.18)'); grd.addColorStop(0.18, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(18,11,5,0.55)');
+    ctx.fillStyle = grd; ctx.fill();
     ctx.beginPath(); ctx.moveTo(pts[i0].x, pts[i0].y);
     for (let i = i0 + 1; i <= i1; i++) ctx.lineTo(pts[i].x, pts[i].y);
     for (let i = i1; i >= i0; i--) ctx.lineTo(pts[i].x, pts[i].y + DIRT); ctx.closePath();
@@ -486,31 +548,59 @@ function drawHazards() {
   }
 }
 
+function groundYAt(x) {
+  const T = G.terrain; if (!T) return null;
+  let best = null; const lo = T.bi(x);
+  for (let bk = lo - 1; bk <= lo + 1; bk++) { if (bk < 0 || bk >= T.buckets.length) continue;
+    for (const idx of T.buckets[bk]) { const s = T.segments[idx];
+      if (x >= s.minx && x <= s.maxx) { const t = (x - s.ax) / ((s.bx - s.ax) || 1); const y = s.ay + (s.by - s.ay) * t;
+        if (best == null || y < best) best = y; } } }
+  return best;
+}
 function drawBike() {
   const b = G.bike, pts = bikePoints(b), im = IMG.bike;
-  ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(b.x, Math.max(pts.rear.y, pts.front.y) + 14, 46, 10, 0, 0, 7); ctx.fill(); ctx.restore();
+  // dynamic contact shadow: tight/dark on the ground, wide/faint in the air
+  const gy = groundYAt(b.x);
+  if (gy != null) {
+    const airH = Math.max(0, gy - (b.y + CONFIG.wheelR)), t = Math.min(1, airH / 300);
+    ctx.save(); ctx.globalAlpha = 0.30 * (1 - t * 0.72); ctx.fillStyle = '#1a1206';
+    ctx.beginPath(); ctx.ellipse(b.x, gy - 2, 40 + t * 34, 9 + t * 3, 0, 0, 7); ctx.fill(); ctx.restore();
+  }
   if (im) {
     const w = CONFIG.wheelBase * BIKE.w, h = w * im.height / im.width;
+    const pivotY = CONFIG.wheelR + 14;          // wheel contact, below the axle line
     ctx.save(); ctx.translate(b.x, b.y + BIKE.lift); ctx.rotate(b.angle);
-    ctx.drawImage(im, -w / 2, -h * BIKE.axleY, w, h); ctx.restore();
+    // suspension squash-&-stretch about the wheels: compress on landing, extend on rebound
+    ctx.translate(0, pivotY); ctx.scale(1 + G.susp * 0.06, 1 - G.susp * 0.17); ctx.translate(0, -pivotY);
+    ctx.drawImage(im, -w / 2, -h * BIKE.axleY, w, h);
+    ctx.restore();
   }
 }
 
+function drawTracks() {
+  ctx.fillStyle = '#2e2011';
+  for (const t of G.tracks) { if (t.a <= 0) continue; ctx.globalAlpha = t.a * 0.5;
+    ctx.beginPath(); ctx.ellipse(t.x, t.y, 4, 2.2, 0, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
 function drawParticles() {
   for (const p of G.particles) {
     const a = Math.max(0, p.life / p.max);
-    if (p.type === 'dust') { ctx.globalAlpha = a * 0.5; ctx.fillStyle = '#d9b483'; }
-    else if (p.type === 'fire') { ctx.globalAlpha = a; ctx.fillStyle = a > 0.5 ? '#ffe14d' : '#ff6a2b'; }
-    else if (p.type === 'smoke') { ctx.globalAlpha = a * 0.5; ctx.fillStyle = '#555'; }
-    else if (p.type === 'confetti') { ctx.globalAlpha = a; ctx.fillStyle = p.col; }
+    if (p.type === 'clod') { ctx.globalAlpha = a; ctx.fillStyle = '#6b4a2a';
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0); ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); ctx.restore(); continue; }
+    if (p.type === 'fire') { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.fillStyle = a > 0.5 ? '#ffe14d' : '#ff6a2b'; }
+    else if (p.type === 'dust') { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a * 0.45; ctx.fillStyle = '#dcc199'; }
+    else if (p.type === 'smoke') { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a * 0.45; ctx.fillStyle = '#4a4038'; }
+    else if (p.type === 'exhaust') { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a * 0.28; ctx.fillStyle = '#9a9a9a'; }
+    else if (p.type === 'confetti') { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a; ctx.fillStyle = p.col; }
     ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 7); ctx.fill();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 }
 
 function drawWorld(scale) {
   drawTerrain(scale);
+  drawTracks();
   for (const d of G.level.course.decos) if (d.type === 'checkpoint') drawFlag(IMG.checkpoint, d.x, d.y, 130, d.active);
   if (G.level.course.finishPt) drawFlag(IMG.finish, G.level.course.finishPt.x, G.level.course.finishPt.y, 150, true);
   drawHazards();
@@ -745,9 +835,21 @@ function frame(now) {
     document.getElementById('dev').textContent = fps + ' fps · ' + G.particles.length + ' p · ' + G.state + ' · ' + G.score; } }
 }
 
+let vigGrad = null, vigW = 0, vigH = 0;
+function drawVignette() {
+  if (G.state === 'menu') return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!vigGrad || vigW !== cssW || vigH !== cssH) {
+    vigW = cssW; vigH = cssH;
+    vigGrad = ctx.createRadialGradient(cssW / 2, cssH * 0.52, Math.min(cssW, cssH) * 0.34, cssW / 2, cssH * 0.52, Math.max(cssW, cssH) * 0.72);
+    vigGrad.addColorStop(0, 'rgba(0,0,0,0)'); vigGrad.addColorStop(1, 'rgba(0,0,0,0.34)');
+  }
+  ctx.fillStyle = vigGrad; ctx.fillRect(0, 0, cssW, cssH);
+}
 function render() {
   drawSky();
   if (G.state !== 'menu' && G.level) { const scale = worldTransform(); drawWorld(scale); }
+  drawVignette();
   drawHUD();
   if (G.flash > 0) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = 'rgba(255,255,255,' + (G.flash * 0.55) + ')'; ctx.fillRect(0, 0, cssW, cssH); }
 }
