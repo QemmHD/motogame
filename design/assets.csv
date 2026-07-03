@@ -1,0 +1,11 @@
+id,role,type,description,size/ratio,style_line_ref,source
+ground_dirt,terrain top surface fill (tiled horizontally),texture,sun-baked cracked dirt motocross track surface with pebbles and tire ruts,1:1 1k -> 512 seamless,FORMULA,generate
+ground_rock,terrain underground body fill (tiled),texture,tan sandstone rock strata with cracks,1:1 1k -> 512 seamless,FORMULA,generate
+sky_bg,far parallax background (scrolled),background,sunny blue sky with soft clouds and distant tan mesa mountains,16:9 1k,FORMULA,generate
+bike,player bike+rider sprite (rotated by chassis angle),sprite,red-and-black motocross dirt bike with helmeted rider leaning forward facing right,1:1 1k keyed,FORMULA,generate
+wheel,spinning wheel overlay (drawn at both axles),sprite,single knobby black dirt-bike tire with red rim side view,1:1 1k keyed,FORMULA,generate
+barrel,explosive hazard object,sprite,red explosive barrel with orange-yellow warning stripes,1:1 1k keyed,FORMULA,generate
+sawblade,rotating hazard object,sprite,circular metal sawblade with orange hazard hub,1:1 1k keyed,FORMULA,generate
+spikes,ground hazard object,sprite,row of sharp metal spikes on a base with hazard stripes,1:1 1k keyed,FORMULA,generate
+checkpoint,checkpoint marker,sprite,tall checkpoint flag pole with blue-and-white pennant,2:3 1k keyed,FORMULA,generate
+finish,level finish marker,sprite,black-and-white checkered finish flag on a pole,2:3 1k keyed,FORMULA,generate
