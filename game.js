@@ -12,6 +12,7 @@ const ASSETS = {
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
 const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: 22, sag: 0.22, dip: 18 };
+const BUILD = 'v1.2';   // shown on the menu; bumps confirm the live deploy updated
 const IMG = {};
 function loadAssets() {
   return Promise.all(Object.entries(ASSETS).map(([k, f]) => new Promise((res) => {
@@ -781,6 +782,8 @@ function drawMenu() {
   ctx.fillStyle = '#fff'; ctx.font = '900 ' + Math.min(64, cssW * 0.11) + 'px system-ui';
   ctx.lineWidth = 6; ctx.strokeStyle = '#1b1f2a'; ctx.strokeText(STR.title, cssW / 2, cssH * 0.18); ctx.fillStyle = '#ffd23e'; ctx.fillText(STR.title, cssW / 2, cssH * 0.18);
   ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '600 16px system-ui'; ctx.fillText(STR.tagline, cssW / 2, cssH * 0.18 + 30);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '600 12px ui-monospace, monospace';
+  ctx.fillText(BUILD, cssW / 2, cssH - 14);
   const cols = cssW < 560 ? 2 : 4, cardW = Math.min(150, (cssW - 40 - (cols - 1) * 14) / cols), cardH = cardW * 0.92;
   const gw = cols * cardW + (cols - 1) * 14, gx = (cssW - gw) / 2, gy = cssH * 0.30;
   ctx.textAlign = 'left';
