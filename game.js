@@ -6,8 +6,12 @@ import { createBike, stepBike, buildTerrain, bikePoints, normAngle, CONFIG } fro
 // ---------------------------------------------------------------- assets ----
 const ASSETS = {
   sky: 'sky.jpg', dirt: 'dirt.png', rock: 'rock.png', bike: 'bike.png', wheel: 'wheel.png',
+  bike_body: 'bike_body.png',
   barrel: 'barrel.png', saw: 'saw.png', spikes: 'spikes.png', checkpoint: 'checkpoint.png', finish: 'finish.png',
 };
+// Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
+// space) that the renderer pins onto the physics axles. Read off the art.
+const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: 21, sag: 0.22, dip: 14 };
 const IMG = {};
 function loadAssets() {
   return Promise.all(Object.entries(ASSETS).map(([k, f]) => new Promise((res) => {
@@ -207,6 +211,7 @@ const G = {
   finishStars: 0, finishTime: 0, finishNewRecord: false, slow: 1, hitstop: 0,
   score: 0, combo: 1, comboTimer: 0, airStart: -1, finishScore: 0, finishRecordScore: false,
   settingsOpen: false, susp: 0, suspVel: 0, trackT: 0,
+  riderLean: 0, leanCmd: 0,
 };
 
 function startLevel(i) {
@@ -260,6 +265,9 @@ function scoreEvent(label, color, base, x, y) {
 function simulate(dt) {
   const bike = G.bike, L = G.level;
   const input = G.state === 'playing' && !G.settingsOpen ? currentInput() : { gas: false, brake: false, leanBack: false, leanFwd: false };
+  // rider body English: lean the character with the control input (smoothed)
+  G.leanCmd = (input.leanFwd ? 1 : 0) - (input.leanBack ? 1 : 0);
+  G.riderLean += (G.leanCmd - G.riderLean) * Math.min(1, dt * 9);
   if (G.state === 'playing') {
     G.elapsed += dt;
     stepBike(bike, G.terrain, input, dt);
@@ -557,23 +565,70 @@ function groundYAt(x) {
         if (best == null || y < best) best = y; } } }
   return best;
 }
+// One spinning wheel: textured sprite if we have one, else a procedural
+// knobby tire + rim + spokes. Rotates by `spin` (radians).
+function drawWheel(cx, cy, r, spin) {
+  const im = IMG.wheel;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(spin);
+  if (im) {
+    ctx.drawImage(im, -r, -r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = '#0d0e11'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();          // tire
+    ctx.strokeStyle = '#26282e'; ctx.lineWidth = r * 0.34;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, 7); ctx.stroke();                             // sidewall
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2;                            // tread lugs
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); ctx.stroke(); }
+    ctx.fillStyle = '#b9c0ca'; ctx.beginPath(); ctx.arc(0, 0, r * 0.30, 0, 7); ctx.fill();    // hub
+    ctx.strokeStyle = '#8a929d'; ctx.lineWidth = 1.6;
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * r * 0.66, Math.sin(a) * r * 0.66); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
 function drawBike() {
-  const b = G.bike, pts = bikePoints(b), im = IMG.bike;
-  // dynamic contact shadow: tight/dark on the ground, wide/faint in the air
+  const b = G.bike, pts = bikePoints(b);
   const gy = groundYAt(b.x);
+  // dynamic contact shadow: tight/dark on the ground, wide/faint in the air
   if (gy != null) {
     const airH = Math.max(0, gy - (b.y + CONFIG.wheelR)), t = Math.min(1, airH / 300);
     ctx.save(); ctx.globalAlpha = 0.30 * (1 - t * 0.72); ctx.fillStyle = '#1a1206';
-    ctx.beginPath(); ctx.ellipse(b.x, gy - 2, 40 + t * 34, 9 + t * 3, 0, 0, 7); ctx.fill(); ctx.restore();
+    ctx.beginPath(); ctx.ellipse(b.x, gy - 2, 44 + t * 34, 10 + t * 3, 0, 0, 7); ctx.fill(); ctx.restore();
   }
-  if (im) {
-    const w = CONFIG.wheelBase * BIKE.w, h = w * im.height / im.width;
-    const pivotY = CONFIG.wheelR + 14;          // wheel contact, below the axle line
-    ctx.save(); ctx.translate(b.x, b.y + BIKE.lift); ctx.rotate(b.angle);
-    // suspension squash-&-stretch about the wheels: compress on landing, extend on rebound
-    ctx.translate(0, pivotY); ctx.scale(1 + G.susp * 0.06, 1 - G.susp * 0.17); ctx.translate(0, -pivotY);
-    ctx.drawImage(im, -w / 2, -h * BIKE.axleY, w, h);
+
+  // ---- suspension-aware anchors -----------------------------------------
+  // The detailed sprite is pinned to the two physics axles, but each axle
+  // anchor is nudged along bike-up by that wheel's REAL compression, so the
+  // body squats/pitches on the suspension while the wheels stay planted.
+  const A = b.angle, ux = Math.sin(A), uy = -Math.cos(A);
+  const rA = pts.rear, fA = pts.front;
+  const rOff = (pts.rearComp - BODY.sag) * BODY.dip;   // >0 compressed -> body down
+  const fOff = (pts.frontComp - BODY.sag) * BODY.dip;
+  const rAnc = { x: rA.x - ux * rOff, y: rA.y - uy * rOff };
+  const fAnc = { x: fA.x - ux * fOff, y: fA.y - uy * fOff };
+
+  const img = IMG.bike_body;
+  if (img) {
+    // similarity transform mapping sprite axle pixels (Sr,Sf) -> world anchors
+    const Sr = BODY.Sr, Sf = BODY.Sf;
+    const svx = Sf.x - Sr.x, svy = Sf.y - Sr.y;
+    const wvx = fAnc.x - rAnc.x, wvy = fAnc.y - rAnc.y;
+    const scale = Math.hypot(wvx, wvy) / Math.hypot(svx, svy);
+    const rot = Math.atan2(wvy, wvx) - Math.atan2(svy, svx);
+    ctx.save();
+    ctx.translate(rAnc.x, rAnc.y); ctx.rotate(rot); ctx.scale(scale, scale); ctx.translate(-Sr.x, -Sr.y);
+    ctx.drawImage(img, 0, 0);
     ctx.restore();
+    // spinning wheels drawn ON TOP at the true axles — they cover the sprite's
+    // open fork/swingarm ends, hiding the suspension joint as the body travels.
+    drawWheel(fA.x, fA.y, BODY.wheelR, b.wheelSpin);
+    drawWheel(rA.x, rA.y, BODY.wheelR, b.wheelSpin);
+  } else if (IMG.bike) {                               // fallback: old single sprite
+    const w = CONFIG.wheelBase * BIKE.w, h = w * IMG.bike.height / IMG.bike.width;
+    ctx.save(); ctx.translate(b.x, b.y + BIKE.lift); ctx.rotate(b.angle);
+    ctx.drawImage(IMG.bike, -w / 2, -h * BIKE.axleY, w, h); ctx.restore();
   }
 }
 

@@ -33,6 +33,23 @@ export const CONFIG = {
 
   iters: 6,           // constraint solver iterations
   substeps: 6,
+
+  // ---- suspension (render/feel layer, does NOT alter collision) ----------
+  // Each wheel carries a sprung DOF driven by the REAL contact response
+  // (penetration load + into-surface impact speed). It never moves the
+  // collision node, so terrain-following & completability are untouched —
+  // it only tells the renderer how far each fork/swingarm has compressed,
+  // which is what sells the "suspension" feel. Front & rear are independent,
+  // so acceleration/braking and one-wheel landings produce weight transfer.
+  suspTravel: 15,      // px of visible wheel travel at full compression
+  suspSag: 0.22,       // static ride compression on flat ground (0..1)
+  suspPenGain: 0.070,  // compression per px of contact penetration
+  suspImpGain: 0.0011, // extra compression per px/s of landing impact
+  suspStiff: 260,      // spring constant pulling toward the load target
+  suspDampComp: 13,    // damping while compressing (soft — soaks bumps)
+  suspDampReb: 24,     // damping while rebounding (firm — no pogo)
+  suspAirTarget: 0.05, // wheels droop (near full extension) in the air
+  suspMax: 1.25,       // clamp on compression (allow slight overshoot)
 };
 
 // ---- helpers --------------------------------------------------------------
@@ -111,6 +128,9 @@ export function createBike(x, y, cfg = CONFIG) {
     grounded: false, rearGround: false, frontGround: false,
     crashed: false, airborne: false, airRot: 0,
     lastFlips: 0, flipEventId: 0, wheelSpin: 0,
+    // suspension (per-wheel sprung DOF, render/feel only)
+    rSusp: cfg.suspSag, rSuspV: 0, fSusp: cfg.suspSag, fSuspV: 0,
+    rearComp: cfg.suspSag, frontComp: cfg.suspSag,
   };
   return bike;
 }
@@ -138,7 +158,7 @@ function solveConstraints(b) {
 function resolveWheel(b, T, node, driven, input, dt) {
   const cfg = b.cfg;
   const c = contact(T, node.x, node.y, cfg.wheelR);
-  if (!c) return false;
+  if (!c) { node._pen = 0; node._impact = 0; return false; }
   // depenetrate
   node.x += c.nx * c.pen; node.y += c.ny * c.pen;
   // velocity split
@@ -150,6 +170,8 @@ function resolveWheel(b, T, node, driven, input, dt) {
   if (tx * fwd.x + ty * fwd.y < 0) { tx = -tx; ty = -ty; }
   let vn = v.x * nx + v.y * ny;
   let vt = v.x * tx + v.y * ty;
+  // record REAL contact load for the suspension spring (render/feel only)
+  node._pen = c.pen; node._impact = vn < 0 ? -vn : 0;
   // cancel into-surface velocity (small bounce); PRESERVE separation so the
   // bike can launch off ramps. tangential is the rolling axis -> keep it free.
   if (vn < 0) vn = -vn * cfg.restitution;
@@ -167,6 +189,25 @@ function headCrash(b, T) {
   const c = contact(T, b.head.x, b.head.y, b.cfg.headR);
   if (c) { b.crashed = true; return true; }
   return false;
+}
+
+// Per-wheel suspension spring. Driven by the REAL contact response captured in
+// resolveWheel (penetration + landing impact). Pure render/feel state — it does
+// not move any collision node, so completability is identical to the rigid core.
+function stepSusp(b, dt) {
+  const cfg = b.cfg;
+  const air = b.airborne;
+  const step = (susp, suspV, pen, impact) => {
+    const target = air
+      ? cfg.suspAirTarget
+      : clamp(cfg.suspSag + pen * cfg.suspPenGain + impact * cfg.suspImpGain, 0, cfg.suspMax);
+    let a = (target - susp) * cfg.suspStiff;              // spring toward load
+    a -= suspV * (suspV > 0 ? cfg.suspDampComp : cfg.suspDampReb); // asym. damp
+    const nv = suspV + a * dt;
+    return [clamp(susp + nv * dt, 0, cfg.suspMax), nv];
+  };
+  [b.rSusp, b.rSuspV] = step(b.rSusp, b.rSuspV, b.rear._pen || 0, b.rear._impact || 0);
+  [b.fSusp, b.fSuspV] = step(b.fSusp, b.fSuspV, b.front._pen || 0, b.front._impact || 0);
 }
 
 function layoutAir(b) {
@@ -226,6 +267,7 @@ function substep(b, T, input, dt) {
   } else {
     if (b.mode === 'ground') { seedAir(b, dt); b.mode = 'air'; }
     b.airborne = true; b.grounded = false; b.rearGround = b.frontGround = false;
+    b.rear._pen = b.rear._impact = 0; b.front._pen = b.front._impact = 0;
     const lean = (input.leanFwd ? 1 : 0) - (input.leanBack ? 1 : 0);
     b.mvy += cfg.gravity * dt;
     b.mx += b.mvx * dt; b.my += b.mvy * dt;
@@ -238,6 +280,7 @@ function substep(b, T, input, dt) {
     layoutAir(b);
     headCrash(b, T);
   }
+  stepSusp(b, dt);
 }
 
 // Advance one frame (sub-stepped).
@@ -250,8 +293,15 @@ export function stepBike(bike, terrain, input, frameDt) {
   bike.angle = Math.atan2(bike.front.y - bike.rear.y, bike.front.x - bike.rear.x);
   const v = velOf(bike.rear, frameDt / bike.cfg.substeps);
   bike.speed = Math.hypot(v.x, v.y);
+  bike.rearComp = bike.rSusp; bike.frontComp = bike.fSusp;
 }
 
 export function bikePoints(b) {
-  return { rear: { x: b.rear.x, y: b.rear.y }, front: { x: b.front.x, y: b.front.y }, head: { x: b.head.x, y: b.head.y } };
+  return {
+    rear: { x: b.rear.x, y: b.rear.y },
+    front: { x: b.front.x, y: b.front.y },
+    head: { x: b.head.x, y: b.head.y },
+    rearComp: b.rearComp, frontComp: b.frontComp,
+    travel: b.cfg.suspTravel,
+  };
 }
