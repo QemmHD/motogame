@@ -6,6 +6,14 @@ shave seconds off the clock, and dodge spinning saws, spikes and exploding barre
 
 **▶ Play it live:** https://warm-aspen-246.higgsfield.gg/
 
+**▶ Play from this GitHub repo (no setup):** https://raw.githack.com/QemmHD/motogame/gh-pages/index.html
+
+**▶ GitHub Pages** (permanent `https://qemmhd.github.io/motogame/`): the `gh-pages`
+branch (game files at root) is already pushed. Enable it once — repo **Settings →
+Pages → Build and deployment → Source: "Deploy from a branch" → Branch: `gh-pages` /
+`(root)` → Save**. The `.github/workflows/pages.yml` "GitHub Actions" source works too
+once Pages is enabled.
+
 ![Moto Rush X3](docs/cover.png)
 
 ![Gameplay](docs/gameplay.png)
