@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1b1f2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./assets/icon-192.png">
+<link rel="apple-touch-icon" href="./assets/icon-192.png">
 <title>Moto Rush X3</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #12141d;
@@ -22,5 +28,14 @@
 <div id="dev"></div>
 <div id="boot">LOADING…</div>
 <script type="module" src="./game.js"></script>
+<script>
+  // PWA: register the service worker for offline play + install
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+  // capture the install prompt so the in-game INSTALL button can trigger it
+  window.__deferredInstall = null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__deferredInstall = e; });
+</script>
 </body>
 </html>

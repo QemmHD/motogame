@@ -33,4 +33,9 @@ export const STR = {
   hintTouch: 'Left buttons lean · right buttons gas & brake · lean back to land flips',
   gas: 'GAS', brake: 'BRAKE', leanL: '↺', leanR: '↻',
   sound: 'SOUND',
+  // v1.1 additions
+  settings: 'SETTINGS', music: 'MUSIC', sfx: 'SFX', motion: 'REDUCED MOTION',
+  haptics: 'VIBRATION', muteAll: 'MUTE ALL', on: 'ON', off: 'OFF', close: 'CLOSE',
+  install: 'INSTALL', score: 'SCORE', bigAir: 'BIG AIR!', nearMiss: 'NEAR MISS!',
+  bestScore: 'BEST',
 };
