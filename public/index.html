@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./assets/icon-192.png">
+<link rel="apple-touch-icon" href="./assets/icon-192.png">
+<title>Moto Rush X3</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #12141d;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: none; overscroll-behavior: none; }
+  #c { display: block; width: 100vw; height: 100vh; }
+  #dev { position: fixed; top: 4px; left: 4px; color: #6f6; font: 12px monospace;
+    display: none; white-space: pre; pointer-events: none; text-shadow: 0 1px 2px #000; z-index: 10; }
+  #dev.performance { top: 82px; left: auto; right: 12px; color: #dff8ff;
+    padding: 12px 14px; border: 1px solid rgba(85,216,255,.72); border-radius: 12px;
+    background: linear-gradient(145deg, rgba(7,13,20,.94), rgba(13,25,37,.88));
+    box-shadow: 0 12px 36px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.06);
+    font: 700 11px/1.52 ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: .15px; text-shadow: none; }
+  @media (max-width: 520px) {
+    #dev.performance { top: 62px; right: 8px; max-width: calc(100vw - 44px);
+      padding: 9px 11px; font-size: 9px; line-height: 1.42; }
+  }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #ffd23e; font-weight: 800; letter-spacing: 2px; background: #12141d; z-index: 5; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="dev"></div>
+<div id="boot">LOADING…</div>
+<script src="./version.js"></script>
+<script type="module" src="./game.js"></script>
+<script>
+  // PWA: register the service worker for offline play + install
+  if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('dev')) {
+    addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+  // capture the install prompt so the in-game INSTALL button can trigger it
+  window.__deferredInstall = null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__deferredInstall = e; });
+</script>
+</body>
+</html>

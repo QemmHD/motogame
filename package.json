@@ -1,0 +1,46 @@
+{
+  "name": "motorush-x3",
+  "version": "1.6.0",
+  "description": "An original momentum-driven 2D stunt racing PWA.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:assets && npm run test:systems && npm run test:physics && npm run test:goldens && npm run test:browser-performance",
+    "test:assets": "node --test tools/verify-public-assets.test.mjs",
+    "test:systems": "node --test tools/rules.test.mjs tools/replay.test.mjs tools/kinematics.test.mjs tools/ragdoll.test.mjs tools/run-session.test.mjs tools/debug-proxies.test.mjs tools/effect-pool.test.mjs tools/input-state.test.mjs tools/perf-metrics.test.mjs",
+    "test:rules": "node --test tools/rules.test.mjs",
+    "test:replay": "node --test tools/replay.test.mjs",
+    "test:kinematics": "node --test tools/kinematics.test.mjs",
+    "test:ragdoll": "node --test tools/ragdoll.test.mjs",
+    "test:session": "node --test tools/run-session.test.mjs",
+    "test:debug": "node --test tools/debug-proxies.test.mjs",
+    "test:effects": "node --test tools/effect-pool.test.mjs",
+    "test:input": "node --test tools/input-state.test.mjs",
+    "test:performance": "node --test tools/perf-metrics.test.mjs",
+    "test:browser-performance": "node tools/performance-browser.mjs",
+    "test:physics": "node tools/test-physics.mjs",
+    "test:goldens": "node tools/verify-golden-tapes.mjs",
+    "generate:goldens": "node tools/generate-golden-tapes.mjs",
+    "verify:assets": "node tools/verify-public-assets.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/QemmHD/motogame.git"
+  },
+  "homepage": "https://qemmhd.github.io/motogame/",
+  "bugs": {
+    "url": "https://github.com/QemmHD/motogame/issues"
+  },
+  "keywords": [
+    "motorcycle",
+    "stunt-game",
+    "canvas-game",
+    "pwa",
+    "physics-game"
+  ],
+  "author": "QemmHD",
+  "license": "ISC",
+  "dependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}
