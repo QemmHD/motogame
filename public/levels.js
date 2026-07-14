@@ -8,7 +8,7 @@
 
 const STEP = 10;
 
-class Course {
+export class Course {
   constructor(startX, startY) {
     this.x = startX; this.y = startY;
     this.startX = startX; this.startY = startY;
@@ -18,9 +18,11 @@ class Course {
     this.hazards = []; this.checkpoints = []; this.decos = [];
     this.finishX = null; this.finishPt = null;
     this.minY = startY; this.maxY = startY;
+    this._surface = 'dirt'; this._surfaceStrength = 1;
   }
   _push(x, y) {
-    this.ground.push({ x, y }); this.x = x; this.y = y;
+    this.ground.push({ x, y, surface: this._surface, surfaceStrength: this._surfaceStrength });
+    this.x = x; this.y = y;
     if (y < this.minY) this.minY = y; if (y > this.maxY) this.maxY = y;
   }
   _curve(w, fn) {
@@ -37,6 +39,15 @@ class Course {
   ramp(w, h) { return this._curve(w, t => ({ dx: t * w, dy: -h * t * t })); }
   landing(w, h) { return this._curve(w, t => ({ dx: t * w, dy: h * (1 - (1 - t) * (1 - t)) })); }
   bumps(n, w, h) { for (let i = 0; i < n; i++) this.hill(w, h); return this; }
+  _surf(type, w, strength = 1) {
+    const prev = this._surface, prevStrength = this._surfaceStrength;
+    this._surface = type; this._surfaceStrength = strength; this.flat(w);
+    this._surface = prev; this._surfaceStrength = prevStrength;
+    return this;
+  }
+  ice(w) { return this._surf('ice', w); }
+  boost(w, strength = 1) { return this._surf('boost', w, strength); }
+  bouncy(w, strength = 1) { return this._surf('bouncy', w, strength); }
   // tight whoops that work the suspension — smooth (zero-slope) ends so the
   // wheels never catch a kink. Clamped to the proven-rollable envelope
   // (>=142 wide, <=25 tall) so they buck the bike without bucking you off.
@@ -63,8 +74,28 @@ class Course {
   saw(dx, height) { this.hazards.push({ type: 'saw', x: this.x + dx, y: this.y - height, r: 36, spin: 0 }); return this; }
   hazard(type, opts = {}) {
     const r = opts.r ?? (type === 'saw' ? 36 : type === 'barrel' ? 26 : 27);
-    this.hazards.push({ type, x: this.x + (opts.dx || 0), y: (opts.y != null ? opts.y : this.y) + (opts.dy || 0), r, spin: 0 });
+    const x = this.x + (opts.dx || 0), y = (opts.y != null ? opts.y : this.y) + (opts.dy || 0);
+    this.hazards.push({ type, x, y, baseX: x, baseY: y, r, spin: 0,
+      motion: opts.motion || null, fuse: opts.fuse, boost: opts.boost, core: opts.core });
     return this;
+  }
+  movingSaw(dx, height, { axis = 'y', amplitude = 70, period = 2.4, phase = 0 } = {}) {
+    return this.hazard('saw', { dx, dy: -height, motion: { kind: 'sine', axis, amplitude, period, phase } });
+  }
+  pendulum(dx, anchorHeight = 210, length = 130, period = 2.8, phase = 0) {
+    const anchorX = this.x + dx, anchorY = this.y - anchorHeight;
+    this.hazards.push({ type: 'mace', x: anchorX, y: anchorY + length, baseX: anchorX,
+      baseY: anchorY + length, anchorX, anchorY, r: 38, spin: 0,
+      motion: { kind: 'pendulum', length, amplitude: 0.82, period, phase } });
+    return this;
+  }
+  crusher(dx, height = 205, travel = 125, period = 2.6, phase = 0) {
+    return this.hazard('crusher', { dx, dy: -height, r: 46,
+      motion: { kind: 'piston', axis: 'y', amplitude: travel, period, phase } });
+  }
+  tnt(dx = 0, dy = -24, opts = {}) {
+    return this.hazard('tnt', { dx, dy, r: 30, fuse: opts.fuse ?? 0.14,
+      boost: opts.boost ?? 760, core: opts.core ?? 44 });
   }
   deco(type, opts = {}) { this.decos.push({ type, x: this.x + (opts.dx || 0), y: this.y + (opts.dy || 0) }); return this; }
   checkpoint() { this.checkpoints.push({ x: this.x, y: this.y }); this.deco('checkpoint', {}); return this; }
@@ -90,7 +121,7 @@ function level1() { // Warm-Up: gas, small jumps, land — teaches the basics
   c.flat(120).checkpoint();
   c.hill(300, 66).jump(280, 190, 58, 220, 200);
   c.flat(180).hill(260, 52).finish();
-  return { name: 'Warm-Up', course: c, star: [18, 25, 34] };
+  return { name: 'Warm-Up', world: 'Canyon Run', course: c, star: [18, 25, 34] };
 }
 
 function level2() { // Air Time: bigger ramps for flips, spikes in the pits
@@ -110,7 +141,7 @@ function level2() { // Air Time: bigger ramps for flips, spikes in the pits
   c.flat(120).whoops(4, 118, 30);
   c.jump(240, 210, 76, 250, 210, { pit: 'spikes' });
   c.flat(160).hill(300, 64).finish();
-  return { name: 'Air Time', course: c, star: [26, 36, 50] };
+  return { name: 'Air Time', world: 'Canyon Run', course: c, star: [26, 36, 50] };
 }
 
 function level3() { // Whoops & Woes: rhythm terrain that works the suspension
@@ -131,7 +162,7 @@ function level3() { // Whoops & Woes: rhythm terrain that works the suspension
   c.whoops(4, 130, 30);
   c.jump(300, 220, 78, 275, 220, { landDrop: 20 });
   c.flat(160).hill(280, 60).finish();
-  return { name: 'Whoops & Woes', course: c, star: [30, 42, 56] };
+  return { name: 'Whoops & Woes', world: 'Canyon Run', course: c, star: [30, 42, 56] };
 }
 
 function level4() { // Danger Zone: saws, barrels, spikes — timing gauntlet
@@ -155,7 +186,7 @@ function level4() { // Danger Zone: saws, barrels, spikes — timing gauntlet
   c.flat(80).saw(0, 156).flat(140);
   c.jump(300, 220, 80, 285, 225, { pit: 'barrel', nPit: 2 });
   c.flat(160).hill(280, 70).finish();
-  return { name: 'Danger Zone', course: c, star: [32, 44, 60] };
+  return { name: 'Danger Zone', world: 'Canyon Run', course: c, star: [32, 44, 60] };
 }
 
 function level5() { // Cliffhanger: big drops, flip gaps, steep landings
@@ -170,13 +201,13 @@ function level5() { // Cliffhanger: big drops, flip gaps, steep landings
   c.flat(120).checkpoint();
   c.dip(300, 86).hill(300, 78);
   c.jump(320, 235, 80, 280, 230, { landDrop: 30 });     // biggest air
-  c.flat(120).saw(0, 158).flat(130);
+  c.flat(120).saw(0, 190).flat(130);       // high route remains safe at full send
   c.jump(300, 220, 78, 270, 220, { landDrop: 40 });
   c.flat(120).checkpoint();
   c.whoops(5, 130, 30);
   c.jump(320, 230, 80, 280, 226, { landDrop: 28, pit: 'spikes' });
   c.flat(160).hill(300, 66).finish();
-  return { name: 'Cliffhanger', course: c, star: [34, 48, 64] };
+  return { name: 'Cliffhanger', world: 'Canyon Run', course: c, star: [34, 48, 64] };
 }
 
 function level6() { // Grand Finale: everything, longer, climactic
@@ -205,7 +236,83 @@ function level6() { // Grand Finale: everything, longer, climactic
   c.jump(320, 235, 80, 280, 230, { landDrop: 30, pit: 'barrel', nPit: 2 });
   c.flat(160).saw(0, 150).flat(160);
   c.hill(300, 70).finish();
-  return { name: 'Grand Finale', course: c, star: [40, 56, 76] };
+  return { name: 'Grand Finale', world: 'Canyon Run', course: c, star: [40, 56, 76] };
 }
 
-export function buildLevels() { return [level1(), level2(), level3(), level4(), level5(), level6()]; }
+function level7() { // Boostline: surface acceleration is taught safely before gaps
+  const c = new Course(180, 320);
+  c.flat(220).checkpoint().boost(260, 0.8).flat(120);
+  c.jump(120, 210, 72, 270, 220).flat(120).checkpoint();
+  c.hill(300, 70).boost(210, 0.9).jump(80, 220, 78, 285, 225, { landDrop: 20 });
+  c.flat(140).movingSaw(80, 168, { axis: 'y', amplitude: 54, period: 2.6 }).flat(180).checkpoint();
+  c.bouncy(150, 0.9).hill(280, 64).jump(220, 215, 76, 270, 220);
+  c.flat(160).boost(230, 1).whoops(4, 132, 24).hill(300, 68).finish();
+  return { name: 'Boostline', world: 'Stormworks', course: c, star: [24, 34, 48] };
+}
+
+function level8() { // Pendulum Pass: readable rhythm hazards with safe runways
+  const c = new Course(180, 318);
+  c.flat(300).checkpoint();
+  c.flat(90).pendulum(70, 218, 142, 3.1, 0).flat(210);
+  c.jump(240, 205, 68, 245, 205).flat(130).checkpoint();
+  c.dip(300, 76).flat(100).pendulum(80, 225, 150, 2.7, 0.3).flat(220);
+  c.jump(260, 215, 76, 270, 218, { pit: 'spikes' }).flat(120).checkpoint();
+  c.whoops(4, 132, 25).flat(80).pendulum(70, 215, 138, 2.35, 0.65).flat(180);
+  c.boost(190, 0.7).jump(120, 220, 78, 280, 224).flat(150).hill(300, 64).finish();
+  return { name: 'Pendulum Pass', world: 'Stormworks', course: c, star: [27, 38, 53] };
+}
+
+function level9() { // Cold Circuit: low-grip braking and committed boost exits
+  const c = new Course(180, 316);
+  c.flat(260).checkpoint().ice(360).flat(120);
+  c.jump(180, 205, 68, 250, 205).flat(120).checkpoint();
+  c.ice(420).hill(280, 62).flat(100).movingSaw(70, 164, { axis: 'x', amplitude: 72, period: 2.8 });
+  c.flat(210).jump(260, 215, 74, 265, 215, { landDrop: 18 }).flat(120).checkpoint();
+  c.ice(310).dip(280, 74).boost(190, 0.85).jump(80, 220, 78, 278, 222);
+  c.flat(150).bouncy(150).whoops(4, 134, 24).hill(300, 66).finish();
+  return { name: 'Cold Circuit', world: 'Stormworks', course: c, star: [29, 41, 56] };
+}
+
+function level10() { // Blast Foundry: TNT can punish a stall or launch a clean line
+  const c = new Course(180, 320);
+  c.flat(280).checkpoint();
+  c.jump(120, 205, 70, 260, 210, { pit: 'tnt' }).flat(130).checkpoint();
+  c.hill(300, 72).flat(100).tnt(90).flat(220);
+  c.jump(220, 220, 80, 285, 225, { pit: 'tnt', nPit: 2 }).flat(130).checkpoint();
+  c.whoops(4, 134, 25).boost(180, 0.72).jump(100, 220, 78, 280, 222);
+  c.flat(140).tnt(80).flat(210).movingSaw(90, 170, { axis: 'y', amplitude: 50, period: 2.3 });
+  c.flat(170).jump(240, 220, 78, 278, 222, { landDrop: 20 }).hill(300, 68).finish();
+  return { name: 'Blast Foundry', world: 'Stormworks', course: c, star: [30, 42, 58] };
+}
+
+function level11() { // Piston Works: wait for a cycle or boost under it
+  const c = new Course(180, 318);
+  c.flat(300).checkpoint();
+  c.flat(120).crusher(70, 220, 132, 2.9, 0).flat(230);
+  c.jump(220, 210, 72, 255, 210).flat(130).checkpoint();
+  c.boost(180, 0.78).flat(100).crusher(70, 225, 138, 2.45, 0.4).flat(230);
+  c.dip(300, 80).whoops(4, 132, 25).flat(120).checkpoint();
+  c.flat(100).crusher(60, 218, 128, 2.2, 0.7).flat(110).pendulum(90, 220, 142, 2.6, 0.2).flat(210);
+  c.jump(260, 220, 78, 278, 222, { pit: 'spikes' }).flat(160).hill(300, 68).finish();
+  return { name: 'Piston Works', world: 'Stormworks', course: c, star: [31, 44, 60] };
+}
+
+function level12() { // Stormbreak: full first-campaign remix and spectacle finish
+  const c = new Course(180, 316);
+  c.flat(260).checkpoint().boost(220, 0.85);
+  c.jump(100, 215, 76, 275, 220, { pit: 'tnt' }).flat(130);
+  c.flat(100).pendulum(70, 220, 145, 2.5, 0.2).flat(220).checkpoint();
+  c.ice(300).whoops(4, 134, 24).bouncy(150).jump(160, 220, 78, 280, 224);
+  c.flat(130).crusher(70, 225, 136, 2.4, 0.5).flat(230).checkpoint();
+  c.hill(300, 76).movingSaw(80, 172, { axis: 'x', amplitude: 80, period: 2.4 }).flat(180);
+  c.jump(260, 225, 80, 285, 228, { landDrop: 24, pit: 'tnt', nPit: 2 });
+  c.flat(130).boost(220, 1).whoops(5, 132, 25).flat(120).checkpoint();
+  c.flat(100).pendulum(70, 225, 150, 2.25, 0.65).flat(220);
+  c.jump(260, 225, 80, 285, 228, { pit: 'spikes' }).flat(170).hill(320, 72).finish();
+  return { name: 'Stormbreak', world: 'Stormworks', course: c, star: [38, 53, 72] };
+}
+
+export function buildLevels() {
+  return [level1(), level2(), level3(), level4(), level5(), level6(),
+    level7(), level8(), level9(), level10(), level11(), level12()];
+}

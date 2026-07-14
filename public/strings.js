@@ -31,6 +31,7 @@ export const STR = {
   // control hints
   hintKeys: '▲ gas   ▼ brake   ◀ lean back / backflip   ▶ lean forward / frontflip',
   hintTouch: 'Left buttons lean · right buttons gas & brake · lean back to land flips',
+  hintCompact: 'GAS · BRAKE · LEAN · FLIP',
   gas: 'GAS', brake: 'BRAKE', leanL: '↺', leanR: '↻',
   sound: 'SOUND',
   // v1.1 additions

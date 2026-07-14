@@ -23,6 +23,8 @@ export const CONFIG = {
   maxSpeed: 1000,     // cap on rear-wheel forward speed (px/s)
   brakeAccel: 2800,   // deceleration while braking + moving
   reverseSpeed: 210,  // top speed in reverse
+  maxLinearSpeed: 2400, // hard safety ceiling for collision/constraint energy
+  maxFallSpeed: 2200, // terminal downward velocity; does not bleed horizontal speed
   rollResist: 0.6,    // gentle rolling resistance (fraction/sec-ish)
   restitution: 0.06,  // wheel bounce
   grip: 0.14,         // tangential slip damping on contact (0=slick,1=glue)
@@ -54,6 +56,7 @@ export const CONFIG = {
 
 // ---- helpers --------------------------------------------------------------
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function len(x, y) { return Math.sqrt(x * x + y * y); }
 function closestOnSeg(px, py, ax, ay, bx, by) {
   const abx = bx - ax, aby = by - ay;
   const denom = abx * abx + aby * aby;
@@ -74,8 +77,13 @@ export function buildTerrain(chains) {
   for (const chain of chains)
     for (let i = 0; i < chain.length - 1; i++) {
       const a = chain[i], b = chain[i + 1];
+      const sx = b.x - a.x, sy = b.y - a.y;
+      if (sx * sx + sy * sy < 1e-8) continue;
       segments.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y,
-        minx: Math.min(a.x, b.x), maxx: Math.max(a.x, b.x) });
+        minx: Math.min(a.x, b.x), maxx: Math.max(a.x, b.x),
+        surface: b.surface || a.surface || 'dirt',
+        surfaceStrength: b.surfaceStrength ?? a.surfaceStrength ?? 1,
+        oneWay: b.oneWay ?? a.oneWay ?? true });
     }
   let minX = Infinity, maxX = -Infinity;
   for (const s of segments) { minX = Math.min(minX, s.minx); maxX = Math.max(maxX, s.maxx); }
@@ -85,27 +93,52 @@ export function buildTerrain(chains) {
   const buckets = Array.from({ length: nB }, () => []);
   const bi = (x) => clamp(Math.floor((x - minX) / bucketSize), 0, nB - 1);
   segments.forEach((s, i) => { for (let b = bi(s.minx); b <= bi(s.maxx); b++) buckets[b].push(i); });
-  return { segments, buckets, bi, chains, minX, maxX };
+  const enabled = new Uint8Array(segments.length); enabled.fill(1);
+  return { segments, buckets, bi, chains, minX, maxX, enabled,
+    seen: new Uint32Array(segments.length), seenToken: 0 };
 }
 // Deepest contact of circle (cx,cy,R) vs terrain, or null.
-function contact(T, cx, cy, R) {
+export function terrainContact(T, cx, cy, R) {
   let best = null;
   const lo = T.bi(cx - R), hi = T.bi(cx + R);
-  const seen = new Set();
+  let token = (T.seenToken + 1) >>> 0;
+  if (token === 0) { T.seen.fill(0); token = 1; }
+  T.seenToken = token;
   for (let b = lo; b <= hi; b++) for (const idx of T.buckets[b]) {
-    if (seen.has(idx)) continue; seen.add(idx);
+    if (T.seen[idx] === token) continue;
+    T.seen[idx] = token;
+    if (T.enabled && !T.enabled[idx]) continue;
     const s = T.segments[idx];
+    const sx = s.bx - s.ax, sy = s.by - s.ay, sl2 = sx * sx + sy * sy;
+    if (sl2 < 1e-8) continue;
+    const rawT = ((cx - s.ax) * sx + (cy - s.ay) * sy) / sl2;
     const p = closestOnSeg(cx, cy, s.ax, s.ay, s.bx, s.by);
     const dx = cx - p.x, dy = cy - p.y;
-    let d = Math.hypot(dx, dy);
-    if (d >= R) continue;
-    let nx, ny;
-    if (d > 1e-6) { nx = dx / d; ny = dy / d; }
-    else { const sx = s.bx - s.ax, sy = s.by - s.ay, sl = Math.hypot(sx, sy) || 1; nx = sy / sl; ny = -sx / sl; d = 0; }
-    const pen = R - d;
-    if (!best || pen > best.pen) best = { pen, nx, ny };
+    let d = len(dx, dy);
+    let nx, ny, pen;
+    if (s.oneWay && rawT >= 0 && rawT <= 1) {
+      const sl = Math.sqrt(sl2); nx = sy / sl; ny = -sx / sl;
+      const signed = dx * nx + dy * ny;
+      // Standard course ground is rendered as solid below the polyline. Recover
+      // shallow solver tunnelling upward, but ignore genuinely distant geometry.
+      if (signed >= R || signed < -R * 4.5) continue;
+      pen = R - signed;
+    } else {
+      if (d >= R) continue;
+      if (d > 1e-6) { nx = dx / d; ny = dy / d; }
+      else { const sl = Math.sqrt(sl2); nx = sy / sl; ny = -sx / sl; d = 0; }
+      pen = R - d;
+    }
+    if (!best || pen > best.pen) best = { pen, nx, ny, segIdx: idx,
+      surface: s.surface, surfaceStrength: s.surfaceStrength };
   }
   return best;
+}
+
+export function setTerrainSegmentEnabled(terrain, segIdx, enabled) {
+  if (!terrain?.enabled || segIdx < 0 || segIdx >= terrain.enabled.length) return false;
+  terrain.enabled[segIdx] = enabled ? 1 : 0;
+  return true;
 }
 
 // ---- bike -----------------------------------------------------------------
@@ -116,7 +149,7 @@ export function createBike(x, y, cfg = CONFIG) {
   const rear = mkNode(x - hb, y, cfg.wheelMass);
   const front = mkNode(x + hb, y, cfg.wheelMass);
   const head = mkNode(x + cfg.headFwd, y - cfg.headUp, cfg.headMass);
-  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const dist = (a, b) => len(a.x - b.x, a.y - b.y);
   const bike = {
     cfg, rear, front, head,
     L_rf: dist(rear, front), L_rh: dist(rear, head), L_fh: dist(front, head),
@@ -124,10 +157,11 @@ export function createBike(x, y, cfg = CONFIG) {
     // air rigid state
     mx: x, my: y, mvx: 0, mvy: 0, aAngle: 0, aOmega: 0,
     // status
-    x, y, angle: 0, speed: 0,
+    x, y, angle: 0, speed: 0, vx: 0, vy: 0, forwardSpeed: 0,
     grounded: false, rearGround: false, frontGround: false,
     crashed: false, airborne: false, airRot: 0,
     lastFlips: 0, flipEventId: 0, wheelSpin: 0,
+    landedThisStep: false, landingImpact: 0,
     // suspension (per-wheel sprung DOF, render/feel only)
     rSusp: cfg.suspSag, rSuspV: 0, fSusp: cfg.suspSag, fSuspV: 0,
     rearComp: cfg.suspSag, frontComp: cfg.suspSag,
@@ -138,13 +172,19 @@ export function createBike(x, y, cfg = CONFIG) {
 function nodesArr(b) { return [b.rear, b.front, b.head]; }
 function velOf(n, dt) { return { x: (n.x - n.ox) / dt, y: (n.y - n.oy) / dt }; }
 function setVel(n, vx, vy, dt) { n.ox = n.x - vx * dt; n.oy = n.y - vy * dt; }
+function capNodeVelocity(n, dt, maxSpeed) {
+  const v = velOf(n, dt), speed = len(v.x, v.y);
+  if (speed <= maxSpeed || speed < 1e-9) return;
+  const k = maxSpeed / speed;
+  setVel(n, v.x * k, v.y * k, dt);
+}
 
 function solveConstraints(b) {
   const links = [[b.rear, b.front, b.L_rf], [b.rear, b.head, b.L_rh], [b.front, b.head, b.L_fh]];
   for (let it = 0; it < b.cfg.iters; it++) {
     for (const [a, c, rest] of links) {
       let dx = c.x - a.x, dy = c.y - a.y;
-      let d = Math.hypot(dx, dy) || 1e-6;
+      let d = len(dx, dy) || 1e-6;
       const diff = (d - rest) / d;
       const wsum = a.im + c.im;
       const ka = a.im / wsum, kc = c.im / wsum;
@@ -157,12 +197,12 @@ function solveConstraints(b) {
 
 function resolveWheel(b, T, node, driven, input, dt) {
   const cfg = b.cfg;
-  const c = contact(T, node.x, node.y, cfg.wheelR);
+  const c = terrainContact(T, node.x, node.y, cfg.wheelR);
   if (!c) { node._pen = 0; node._impact = 0; return false; }
+  const v = velOf(node, dt);
   // depenetrate
   node.x += c.nx * c.pen; node.y += c.ny * c.pen;
   // velocity split
-  let v = velOf(node, dt);
   const nx = c.nx, ny = c.ny;
   let tx = -ny, ty = nx;
   // forward tangent aligned with travel / bike facing
@@ -171,14 +211,22 @@ function resolveWheel(b, T, node, driven, input, dt) {
   let vn = v.x * nx + v.y * ny;
   let vt = v.x * tx + v.y * ty;
   // record REAL contact load for the suspension spring (render/feel only)
-  node._pen = c.pen; node._impact = vn < 0 ? -vn : 0;
+  node._pen = c.pen; node._impact = vn < 0 ? -vn : 0; node._surface = c.surface;
   // cancel into-surface velocity (small bounce); PRESERVE separation so the
   // bike can launch off ramps. tangential is the rolling axis -> keep it free.
-  if (vn < 0) vn = -vn * cfg.restitution;
-  vt -= vt * cfg.rollResist * dt;
+  const ice = c.surface === 'ice', boost = c.surface === 'boost', bouncy = c.surface === 'bouncy';
+  const restitution = bouncy ? Math.max(0.72, cfg.restitution) : cfg.restitution;
+  if (vn < 0) vn = -vn * restitution;
+  vt -= vt * cfg.rollResist * (ice ? 0.08 : 1) * dt;
   if (driven) {
-    if (input.gas && vt < cfg.maxSpeed) vt = Math.min(vt + cfg.driveAccel * dt, cfg.maxSpeed);
-    if (input.brake) vt = vt > 30 ? Math.max(vt - cfg.brakeAccel * dt, 0) : Math.max(vt - cfg.brakeAccel * dt, -cfg.reverseSpeed);
+    const traction = ice ? 0.24 : 1;
+    if (input.gas && vt < cfg.maxSpeed) vt = Math.min(vt + cfg.driveAccel * traction * dt, cfg.maxSpeed);
+    if (input.brake) {
+      const brake = cfg.brakeAccel * traction * dt;
+      vt = vt > 30 ? Math.max(vt - brake, 0) : Math.max(vt - brake, -cfg.reverseSpeed);
+    }
+    if (boost && vt > -40) vt += 2500 * c.surfaceStrength * dt;
+    vt = clamp(vt, -cfg.reverseSpeed, cfg.maxLinearSpeed);
     b.wheelSpin += (vt / cfg.wheelR) * dt;
   }
   setVel(node, nx * vn + tx * vt, ny * vn + ty * vt, dt);
@@ -186,7 +234,7 @@ function resolveWheel(b, T, node, driven, input, dt) {
 }
 
 function headCrash(b, T) {
-  const c = contact(T, b.head.x, b.head.y, b.cfg.headR);
+  const c = terrainContact(T, b.head.x, b.head.y, b.cfg.headR);
   if (c) { b.crashed = true; return true; }
   return false;
 }
@@ -239,8 +287,8 @@ function substep(b, T, input, dt) {
   b._dt = dt;
 
   // Is the bike touching ground with either wheel right now?
-  const cRear = contact(T, b.rear.x, b.rear.y, cfg.wheelR);
-  const cFront = contact(T, b.front.x, b.front.y, cfg.wheelR);
+  const cRear = terrainContact(T, b.rear.x, b.rear.y, cfg.wheelR);
+  const cFront = terrainContact(T, b.front.x, b.front.y, cfg.wheelR);
   const touching = !!(cRear || cFront);
 
   if (touching) {
@@ -252,14 +300,21 @@ function substep(b, T, input, dt) {
       n.x += vx; n.y += vy + cfg.gravity * dt * dt;
     }
     solveConstraints(b);
-    const rg = resolveWheel(b, T, b.rear, true, input, dt);
-    const fg = resolveWheel(b, T, b.front, false, input, dt);
+    let rg = resolveWheel(b, T, b.rear, true, input, dt);
+    let fg = resolveWheel(b, T, b.front, false, input, dt);
     solveConstraints(b);
+    // Constraints can re-introduce shallow penetration; finish with contacts so
+    // a wheel is never left on the solid underside of ordinary course ground.
+    rg = resolveWheel(b, T, b.rear, true, input, dt) || rg;
+    fg = resolveWheel(b, T, b.front, false, input, dt) || fg;
     b.rearGround = rg; b.frontGround = fg; b.grounded = rg || fg;
+    for (const n of nodesArr(b)) capNodeVelocity(n, dt, cfg.maxLinearSpeed);
     // grounded lean: small wheelie / nose torque via head nudge handled by air only; ground stays stable
     headCrash(b, T);
-    if (b.airborne) { // just landed
+    if (b.airborne && !b.crashed) { // just landed cleanly
       b.airborne = false;
+      b.landedThisStep = true;
+      b.landingImpact = Math.max(b.rear._impact || 0, b.front._impact || 0);
       const n = Math.trunc(Math.abs(b.airRot) / (2 * Math.PI) + 0.15);
       if (n > 0) { b.lastFlips = n * Math.sign(b.airRot); b.flipEventId++; }
       b.airRot = 0;
@@ -270,6 +325,8 @@ function substep(b, T, input, dt) {
     b.rear._pen = b.rear._impact = 0; b.front._pen = b.front._impact = 0;
     const lean = (input.leanFwd ? 1 : 0) - (input.leanBack ? 1 : 0);
     b.mvy += cfg.gravity * dt;
+    b.mvx = clamp(b.mvx, -cfg.maxLinearSpeed, cfg.maxLinearSpeed);
+    b.mvy = clamp(b.mvy, -cfg.maxLinearSpeed, cfg.maxFallSpeed);
     b.mx += b.mvx * dt; b.my += b.mvy * dt;
     b.aOmega += lean * cfg.airAccel * dt;
     b.aOmega *= (1 - cfg.airDamp * dt);
@@ -285,15 +342,39 @@ function substep(b, T, input, dt) {
 
 // Advance one frame (sub-stepped).
 export function stepBike(bike, terrain, input, frameDt) {
+  bike.landedThisStep = false; bike.landingImpact = 0;
   const dt = frameDt / bike.cfg.substeps;
   for (let i = 0; i < bike.cfg.substeps; i++) substep(bike, terrain, input, dt);
   // publish render/status fields
   bike.x = (bike.rear.x + bike.front.x) / 2;
   bike.y = (bike.rear.y + bike.front.y) / 2;
   bike.angle = Math.atan2(bike.front.y - bike.rear.y, bike.front.x - bike.rear.x);
-  const v = velOf(bike.rear, frameDt / bike.cfg.substeps);
-  bike.speed = Math.hypot(v.x, v.y);
+  const sampleDt = frameDt / bike.cfg.substeps;
+  const vr = velOf(bike.rear, sampleDt), vf = velOf(bike.front, sampleDt);
+  bike.vx = (vr.x + vf.x) * 0.5; bike.vy = (vr.y + vf.y) * 0.5;
+  bike.speed = len(bike.vx, bike.vy);
+  bike.forwardSpeed = bike.vx * Math.cos(bike.angle) + bike.vy * Math.sin(bike.angle);
   bike.rearComp = bike.rSusp; bike.frontComp = bike.fSusp;
+}
+
+// Adds an instantaneous velocity change to the bike. This is the shared,
+// mode-safe hook used by launch pads, explosions, geysers, and moving props.
+export function applyImpulse(bike, ix, iy, angularImpulse = 0) {
+  if (!bike || bike.crashed) return;
+  const dt = bike._dt || (1 / 60 / bike.cfg.substeps);
+  if (bike.mode === 'air') {
+    bike.mvx += ix; bike.mvy += iy;
+    bike.mvx = clamp(bike.mvx, -bike.cfg.maxLinearSpeed, bike.cfg.maxLinearSpeed);
+    bike.mvy = clamp(bike.mvy, -bike.cfg.maxLinearSpeed, bike.cfg.maxFallSpeed);
+    bike.aOmega = clamp(bike.aOmega + angularImpulse, -bike.cfg.maxAirOmega, bike.cfg.maxAirOmega);
+    layoutAir(bike);
+  } else {
+    for (const n of nodesArr(bike)) {
+      const v = velOf(n, dt);
+      setVel(n, v.x + ix, v.y + iy, dt);
+      capNodeVelocity(n, dt, bike.cfg.maxLinearSpeed);
+    }
+  }
 }
 
 export function bikePoints(b) {

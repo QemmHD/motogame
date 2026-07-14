@@ -2,6 +2,7 @@
 import { STR } from './strings.js';
 import { buildLevels } from './levels.js';
 import { createBike, stepBike, buildTerrain, bikePoints, normAngle, CONFIG } from './physics.js';
+import { createRunState, stepRunRules } from './rules.js';
 
 // ---------------------------------------------------------------- assets ----
 const ASSETS = {
@@ -11,8 +12,8 @@ const ASSETS = {
 };
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
-const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: 22, sag: 0.22, dip: 18 };
-const BUILD = 'v1.2';   // shown on the menu; bumps confirm the live deploy updated
+const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: CONFIG.wheelR, sag: 0.22, dip: 18 };
+const BUILD = globalThis.MOTO_RUSH_BUILD?.label || 'v1.3-dev';
 const IMG = {};
 function loadAssets() {
   return Promise.all(Object.entries(ASSETS).map(([k, f]) => new Promise((res) => {
@@ -150,7 +151,7 @@ addEventListener('keyup', e => { if (KEYMAP[e.code]) held.delete(KEYMAP[e.code])
 // pointers for on-screen controls + UI taps
 const pointers = new Map();       // id -> {x,y}
 let uiButtons = [];               // rebuilt each frame: {x,y,w,h,id}
-function pointFromEvt(e, t) { const r = canvas.getBoundingClientRect(); return { x: (t.clientX - r.left), y: (t.clientY - r.top) }; }
+function pointFromEvt(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 function onDown(id, p) {
   Audio2.resume();
   for (const b of uiButtons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { doUI(b.id); return; }
@@ -158,13 +159,14 @@ function onDown(id, p) {
 }
 function onMove(id, p) { if (pointers.has(id)) pointers.set(id, p); }
 function onUp(id) { pointers.delete(id); }
-canvas.addEventListener('touchstart', e => { for (const t of e.changedTouches) onDown(t.identifier, pointFromEvt(e, t)); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchmove', e => { for (const t of e.changedTouches) onMove(t.identifier, pointFromEvt(e, t)); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchend', e => { for (const t of e.changedTouches) onUp(t.identifier); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchcancel', e => { for (const t of e.changedTouches) onUp(t.identifier); }, { passive: false });
-canvas.addEventListener('mousedown', e => onDown('m', pointFromEvt(e, e)));
-canvas.addEventListener('mousemove', e => { if (pointers.has('m')) onMove('m', pointFromEvt(e, e)); });
-addEventListener('mouseup', () => onUp('m'));
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse') isTouch = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  onDown(e.pointerId, pointFromEvt(e)); e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('pointermove', e => { onMove(e.pointerId, pointFromEvt(e)); e.preventDefault(); }, { passive: false });
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
+  canvas.addEventListener(type, e => { onUp(e.pointerId); e.preventDefault(); }, { passive: false });
 
 function controlRects() {
   const s = Math.min(cssW, cssH); const r = Math.max(46, s * 0.085); const m = r * 0.7;
@@ -197,44 +199,51 @@ function currentInput() {
     for (const { x, y } of pointers.values())
       for (const k in R) { const b = R[k]; if (Math.hypot(x - b.x, y - b.y) <= b.r * 1.15) cmd[k] = true; }
   }
+  if (devAutoplay && G.state === 'playing') {
+    cmd.gas = true;
+    if (!G.bike?.grounded) {
+      const angle = normAngle(G.bike?.angle || 0);
+      if (angle > 0.25) cmd.leanBack = true;
+      else if (angle < -0.25) cmd.leanFwd = true;
+    }
+  }
   return cmd;
 }
 let isTouch = false;
-addEventListener('touchstart', () => { isTouch = true; }, { once: true, passive: true });
+function clearControls() { held.clear(); pointers.clear(); }
 
 // ---------------------------------------------------------------- game ------
 const levels = buildLevels();
+const worlds = [...new Set(levels.map(L => L.world || 'Campaign'))];
 const G = {
-  state: 'loading', levelIdx: 0, level: null, terrain: null, bike: null,
+  state: 'loading', levelIdx: 0, level: null, terrain: null, bike: null, run: null, menuWorld: 0,
   cam: { x: 0, y: 0, viewH: 460, roll: 0, kickX: 0, kickY: 0 }, elapsed: 0, flipBonus: 0, running: false,
   cpIndex: 0, particles: [], tracks: [], shake: 0, crashTimer: 0, finishTimer: 0,
   popups: [], flash: 0, cpFlash: 0, prevGrounded: true, prevFlipEvent: 0,
   finishStars: 0, finishTime: 0, finishNewRecord: false, slow: 1, hitstop: 0,
   score: 0, combo: 1, comboTimer: 0, airStart: -1, finishScore: 0, finishRecordScore: false,
-  settingsOpen: false, susp: 0, suspVel: 0, trackT: 0,
+  settingsOpen: false, trackT: 0,
   riderLean: 0, leanCmd: 0,
 };
 
 function startLevel(i) {
   const L = levels[i]; G.levelIdx = i; G.level = L;
   G.terrain = buildTerrain(L.course.chains);
-  G.cpList = [{ x: L.course.startX, y: L.course.startY }, ...L.course.checkpoints];
-  G.cpIndex = 0;
+  G.run = createRunState(L); G.cpList = G.run.cpList; G.cpIndex = 0;
   G.bike = createBike(L.course.startX, L.course.startY - 40);
   G.elapsed = 0; G.flipBonus = 0; G.running = true; G.state = 'playing';
   G.particles.length = 0; G.popups.length = 0; G.shake = 0; G.crashTimer = 0;
   G.prevGrounded = true; G.prevFlipEvent = G.bike.flipEventId;
   G.slow = 1; G.hitstop = 0; G.flash = 0;
   G.score = 0; G.combo = 1; G.comboTimer = 0; G.airStart = -1;
-  G.susp = 0; G.suspVel = 0; G.tracks.length = 0; G.trackT = 0;
+  G.tracks.length = 0; G.trackT = 0;
   G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
-  G.prevBikeY = G.bike.y;
   for (const cp of L.course.decos) if (cp.type === 'checkpoint') cp.active = false;
-  for (const h of L.course.hazards) { h.spin = 0; h._nm = false; }
   Audio2.setMusicState('drive');
 }
 function restartLevel() { if (G.level) startLevel(G.levelIdx); }
 function respawn() {
+  G.cpIndex = G.run?.cpIndex ?? G.cpIndex;
   const cp = G.cpList[G.cpIndex];
   const keepSpin = G.bike.wheelSpin;
   G.bike = createBike(cp.x, cp.y - 40); G.bike.wheelSpin = keepSpin;
@@ -289,9 +298,8 @@ function simulate(dt) {
     }
     // air tracking + landing feedback
     if (!bike.grounded && G.prevGrounded) G.airStart = G.elapsed;
-    if (bike.grounded && !G.prevGrounded) {
-      const v = Math.abs((bike.rear.y - bike.rear.oy) * 360);
-      G.susp = Math.max(G.susp, Math.min(1.05, v / 480)); G.suspVel = Math.min(G.suspVel, 0); // suspension soaks the impact
+    if (bike.landedThisStep && !bike.crashed) {
+      const v = bike.landingImpact;
       if (v > 120) { shakeAdd(Math.min(14, v / 90)); Audio2.land(v); dustBurst(bike.rear.x, bike.rear.y, 8); vib(18);
         camKick(0, Math.min(10, v / 90)); if (v > 300) dirtClods(bike.rear.x, bike.rear.y, Math.min(10, v / 120)); }
       if (v > 520 && !reduced()) { G.hitstop = 0.04; G.flash = Math.min(0.4, v / 1600); }
@@ -307,15 +315,23 @@ function simulate(dt) {
       const p = bikePoints(bike); G.tracks.push({ x: p.rear.x, y: p.rear.y + CONFIG.wheelR * 0.7, a: 0.5 });
       if (G.tracks.length > 220) G.tracks.shift(); } }
 
-    updateHazards(dt);
-    if (!bike.crashed) scanHazards();
-
-    while (G.cpIndex + 1 < G.cpList.length && bike.x > G.cpList[G.cpIndex + 1].x) {
-      G.cpIndex++; const cp = G.cpList[G.cpIndex];
+    const events = stepRunRules(L, G.run, bike);
+    for (const blast of events.explosions) explosion(blast.x, blast.y);
+    for (const impulse of events.impulses) {
+      addPopup('BLAST BOOST!', impulse.x, impulse.y - 56, '#ffb12b');
+      scoreEvent('BLAST LINE', '#ffb12b', Math.round(impulse.power * 0.3), impulse.x, impulse.y - 88);
+      shakeAdd(12); camKick(-6, -8); vib(24);
+    }
+    for (const miss of events.nearMisses) {
+      scoreEvent(STR.nearMiss, '#8fe3ff', 70, miss.x, miss.y - 40); Audio2.stunt();
+    }
+    if (events.crash) bike.crashed = true;
+    if (events.checkpoint) {
+      G.cpIndex = G.run.cpIndex; const cp = events.checkpoint;
       const d = L.course.decos.find(o => o.type === 'checkpoint' && Math.abs(o.x - cp.x) < 2); if (d) d.active = true;
       G.cpFlash = 1.2; Audio2.checkpoint(); addPopup(STR.checkpoint, bike.x, bike.y - 80, '#8fe3ff');
     }
-    if (bike.x > L.course.finishX) return finishLevel();
+    if (events.finished && !bike.crashed) return finishLevel();
     if (bike.crashed) return doCrash();
     if (bike.y > L.course.bounds().maxY + 900) { bike.crashed = true; return doCrash(); }
   } else if (G.state === 'crashed') {
@@ -345,21 +361,6 @@ function finishLevel() {
   if (G.levelIdx + 1 < levels.length) save.unlocked = Math.max(save.unlocked, G.levelIdx + 2);
   persist(); Audio2.finish(); Audio2.setMusicState('menu'); vib(60);
   confetti();
-}
-
-// ---- hazards ----
-function updateHazards(dt) { for (const h of G.level.course.hazards) if (h.type === 'saw') h.spin += dt * 9; }
-function scanHazards() {
-  const b = G.bike, pts = bikePoints(b), cpsPts = [pts.rear, pts.front, pts.head, { x: b.x, y: b.y }];
-  for (const h of G.level.course.hazards) {
-    const crashR = h.r + 10, nmR = h.r + 46;
-    let minD2 = Infinity;
-    for (const p of cpsPts) { const d2 = (p.x - h.x) ** 2 + (p.y - h.y) ** 2; if (d2 < minD2) minD2 = d2; }
-    if (minD2 < crashR * crashR) { b.crashed = true; if (h.type === 'barrel') explosion(h.x, h.y); return; }
-    if (!h._nm && minD2 < nmR * nmR && b.speed > 260 && !b.grounded) {
-      h._nm = true; scoreEvent(STR.nearMiss, '#8fe3ff', 70, h.x, h.y - 40); Audio2.stunt();
-    }
-  }
 }
 
 // ---- particles ----
@@ -412,22 +413,13 @@ function updateParticles(dt) {
   if (G.tracks.length && G.tracks[0].a <= 0) G.tracks.shift();
   if (G.cpFlash > 0) G.cpFlash -= dt;
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
-  // suspension render-spring — compression set directly by impacts/bumps, then
-  // relaxes to rest with a firm rebound bounce. Also breathes over rolling bumps.
-  const b = G.bike;
-  if (b && (G.state === 'playing' || G.state === 'crashed')) {
-    const vy = (b.y - (G.prevBikeY == null ? b.y : G.prevBikeY)) / dt; G.prevBikeY = b.y;
-    if (b.grounded && vy > 30) G.susp = Math.max(G.susp, Math.min(0.55, vy / 1200)); // downslopes/bumps
-  }
-  G.suspVel += (-G.susp * 120 - G.suspVel * (G.suspVel > 0 ? 8 : 13)) * dt;
-  G.susp = Math.max(-0.4, Math.min(1.3, G.susp + G.suspVel * dt));
   G.cam.kickX *= (1 - Math.min(1, dt * 9)); G.cam.kickY *= (1 - Math.min(1, dt * 9));
 }
 
 // ---------------------------------------------------------------- camera ----
 function updateCamera(dt) {
   const b = G.bike;
-  const vx = (b.rear.x - b.rear.ox) * 360, vy = (b.rear.y - b.rear.oy) * 360;
+  const vx = b.vx, vy = b.vy;
   const tx = b.x + Math.max(-220, Math.min(280, vx * 0.32));
   const ty = b.y - 46 + Math.max(-70, Math.min(140, vy * 0.14));
   const tv = 452 + Math.min(200, Math.abs(vx) * 0.12) + (b.airborne ? 90 : 0);
@@ -504,6 +496,23 @@ function visibleSlice(pts, left, right) {
   return [Math.max(0, i0), Math.min(pts.length - 1, i1)];
 }
 
+function drawSurfaceBands(pts, i0, i1) {
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = Math.max(1, i0 + 1); i <= i1; i++) {
+    const a = pts[i - 1], b = pts[i], surface = b.surface || 'dirt';
+    if (surface === 'dirt') continue;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - 2); ctx.lineTo(b.x, b.y - 2);
+    ctx.lineWidth = surface === 'boost' ? 14 : 11;
+    ctx.strokeStyle = surface === 'ice' ? 'rgba(150,235,255,0.92)'
+      : surface === 'boost' ? 'rgba(255,175,35,0.96)' : 'rgba(236,95,255,0.92)';
+    ctx.setLineDash(surface === 'boost' ? [18, 10] : surface === 'bouncy' ? [12, 7] : []);
+    ctx.lineDashOffset = surface === 'boost' ? -performance.now() * 0.04 : 0;
+    ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.setLineDash([]); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawTerrain(scale) {
   const left = G.cam.x - (cssW / 2) / scale - 80, right = G.cam.x + (cssW / 2) / scale + 80;
   const bottom = G.cam.y + (cssH * 0.6) / scale + 400;
@@ -530,6 +539,7 @@ function drawTerrain(scale) {
     for (let i = i0 + 1; i <= i1; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.lineWidth = 5; ctx.strokeStyle = '#3a2717'; ctx.stroke();
     ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,225,150,0.55)'; ctx.stroke();
+    drawSurfaceBands(pts, i0, i1);
   }
 }
 
@@ -542,7 +552,15 @@ function drawFlag(im, x, groundY, h, glow) {
 }
 
 function drawHazards() {
-  for (const h of G.level.course.hazards) {
+  for (const h of G.run?.hazards || []) {
+    if (h.exploded) continue;
+    if (h.motion?.kind === 'sine') {
+      ctx.save(); ctx.globalAlpha = 0.22; ctx.strokeStyle = '#9fd4ff'; ctx.lineWidth = 2; ctx.setLineDash([8, 10]);
+      ctx.beginPath();
+      if (h.motion.axis === 'x') { ctx.moveTo(h.baseX - h.motion.amplitude, h.baseY); ctx.lineTo(h.baseX + h.motion.amplitude, h.baseY); }
+      else { ctx.moveTo(h.baseX, h.baseY - h.motion.amplitude); ctx.lineTo(h.baseX, h.baseY + h.motion.amplitude); }
+      ctx.stroke(); ctx.restore();
+    }
     if (h.type === 'saw') {
       const d = h.r * 2.2, im = IMG.saw;
       ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(h.spin);
@@ -553,6 +571,32 @@ function drawHazards() {
     } else if (h.type === 'spikes') {
       const im = IMG.spikes; const w = h.r * 3.0, ih = w * (im ? im.height / im.width : 0.7);
       if (im) ctx.drawImage(im, h.x - w / 2, h.y - ih + 10, w, ih);
+    } else if (h.type === 'mace') {
+      ctx.save();
+      ctx.strokeStyle = '#343a45'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(h.anchorX, h.anchorY); ctx.lineTo(h.x, h.y); ctx.stroke();
+      ctx.strokeStyle = '#9aa3b1'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.translate(h.x, h.y); ctx.rotate(h.spin); ctx.fillStyle = '#303641'; ctx.strokeStyle = '#b8c2d1'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, h.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * (h.r - 2), Math.sin(a) * (h.r - 2));
+        ctx.lineTo(Math.cos(a) * (h.r + 13), Math.sin(a) * (h.r + 13)); ctx.stroke(); }
+      ctx.restore();
+    } else if (h.type === 'crusher') {
+      ctx.save();
+      ctx.fillStyle = '#343a45'; ctx.fillRect(h.baseX - 13, h.baseY - 150, 26, Math.max(150, h.y - h.baseY + 150));
+      ctx.fillStyle = '#697383'; ctx.strokeStyle = '#161a20'; ctx.lineWidth = 4;
+      roundRect(h.x - 58, h.y - 34, 116, 68, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffbe2e';
+      for (let x = h.x - 47; x < h.x + 45; x += 23) { ctx.save(); ctx.translate(x, h.y); ctx.rotate(-0.7); ctx.fillRect(-5, -31, 10, 62); ctx.restore(); }
+      ctx.restore();
+    } else if (h.type === 'tnt') {
+      const pulse = h.triggered ? 1 + Math.sin(G.run.tick * 0.65) * 0.08 : 1;
+      ctx.save(); ctx.translate(h.x, h.y); ctx.scale(pulse, pulse);
+      ctx.fillStyle = h.triggered ? '#ffcf34' : '#d63e2f'; ctx.strokeStyle = '#491611'; ctx.lineWidth = 4;
+      roundRect(-32, -27, 64, 54, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff1ca'; ctx.font = '900 18px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('TNT', 0, 2);
+      ctx.strokeStyle = '#2c2c2c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(12, -27); ctx.quadraticCurveTo(20, -42, 30, -35); ctx.stroke();
+      ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
   }
 }
@@ -784,11 +828,18 @@ function drawMenu() {
   ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '600 16px system-ui'; ctx.fillText(STR.tagline, cssW / 2, cssH * 0.18 + 30);
   ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '600 12px ui-monospace, monospace';
   ctx.fillText(BUILD, cssW / 2, cssH - 14);
+  const tabY = cssH * 0.235, tabGap = 10;
+  const tabW = Math.min(156, (cssW - 40 - tabGap * (worlds.length - 1)) / worlds.length);
+  const tabsW = worlds.length * tabW + (worlds.length - 1) * tabGap, tabsX = (cssW - tabsW) / 2;
+  worlds.forEach((world, i) => btn(tabsX + i * (tabW + tabGap), tabY, tabW, 34, world.toUpperCase(), 'world' + i,
+    i === G.menuWorld ? '#3c6bff' : 'rgba(18,20,29,0.72)'));
+  const visibleLevels = levels.map((L, i) => ({ L, i })).filter(x => (x.L.world || 'Campaign') === worlds[G.menuWorld]);
   const cols = cssW < 560 ? 2 : 4, cardW = Math.min(150, (cssW - 40 - (cols - 1) * 14) / cols), cardH = cardW * 0.92;
-  const gw = cols * cardW + (cols - 1) * 14, gx = (cssW - gw) / 2, gy = cssH * 0.30;
+  const usedCols = Math.min(cols, visibleLevels.length), gw = usedCols * cardW + (usedCols - 1) * 14;
+  const gx = (cssW - gw) / 2, gy = cssH * 0.31;
   ctx.textAlign = 'left';
-  levels.forEach((L, i) => {
-    const c = i % cols, r = Math.floor(i / cols);
+  visibleLevels.forEach(({ L, i }, pageIndex) => {
+    const c = pageIndex % cols, r = Math.floor(pageIndex / cols);
     const x = gx + c * (cardW + 14), y = gy + r * (cardH + 16);
     const locked = (i + 1) > save.unlocked;
     roundRect(x, y, cardW, cardH, 14); ctx.fillStyle = locked ? 'rgba(30,32,42,0.8)' : 'rgba(255,90,60,0.92)'; ctx.fill();
@@ -806,7 +857,7 @@ function drawMenu() {
     ctx.textAlign = 'left';
   });
   ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '600 13px system-ui';
-  ctx.fillText(isTouch ? STR.hintTouch : STR.hintKeys, cssW / 2, cssH - 26);
+  ctx.fillText(cssW < 560 ? STR.hintCompact : (isTouch ? STR.hintTouch : STR.hintKeys), cssW / 2, cssH - 26);
   // top-right controls: settings gear + mute (+ install when available)
   btn(cssW - 14 - 46, 14, 46, 40, '⚙', 'gear', 'rgba(18,20,29,0.6)');
   btn(cssW - 14 - 46 - 52, 14, 46, 40, Audio2.muted ? '🔇' : '🔊', 'mute', 'rgba(18,20,29,0.6)');
@@ -850,7 +901,8 @@ function doUI(id) {
   if (id === 'pause') { togglePause(); return; }
   if (id === 'resume') { G.state = 'playing'; return; }
   if (id === 'retry') { G.settingsOpen = false; restartLevel(); return; }
-  if (id === 'menu') { G.settingsOpen = false; G.state = 'menu'; G.running = false; Audio2.setMusicState('menu'); return; }
+  if (id === 'menu') { G.settingsOpen = false; G.state = 'menu'; G.running = false;
+    G.menuWorld = Math.max(0, worlds.indexOf(G.level?.world || worlds[0])); Audio2.setMusicState('menu'); return; }
   if (id === 'next') { startLevel(Math.min(G.levelIdx + 1, levels.length - 1)); return; }
   if (id === 'gear') { G.settingsOpen = true; return; }
   if (id === 'set_close') { G.settingsOpen = false; return; }
@@ -862,15 +914,20 @@ function doUI(id) {
   if (id === 'set_motion') { SETTINGS.reducedMotion = !SETTINGS.reducedMotion; if (SETTINGS.reducedMotion) G.shake = 0; persist(); return; }
   if (id === 'set_haptics') { SETTINGS.haptics = !SETTINGS.haptics; persist(); if (SETTINGS.haptics) vib(20); return; }
   if (id === 'install') { const d = window.__deferredInstall; if (d) { d.prompt(); window.__deferredInstall = null; } return; }
+  if (id.startsWith('world')) { G.menuWorld = Math.max(0, Math.min(worlds.length - 1, parseInt(id.slice(5), 10) || 0)); return; }
   if (id.startsWith('lvl')) { startLevel(parseInt(id.slice(3), 10)); return; }
 }
 
 // ---------------------------------------------------------------- loop ------
 const STEP = 1 / 60; let acc = 0, last = performance.now();
-const dev = new URLSearchParams(location.search).has('dev');
+const devParams = new URLSearchParams(location.search), dev = devParams.has('dev');
+const devAutoplay = dev && devParams.has('autoplay');
+if (dev && devParams.has('touch')) isTouch = true;
+const devLevel = Math.max(0, Math.min(levels.length - 1, (parseInt(devParams.get('level'), 10) || 1) - 1));
 if (dev) document.getElementById('dev').style.display = 'block';
 let frames = 0, fpsAt = last, fps = 0;
-addEventListener('blur', () => { if (G.state === 'playing') G.state = 'paused'; });
+addEventListener('blur', () => { clearControls(); if (G.state === 'playing') G.state = 'paused'; });
+addEventListener('visibilitychange', () => { if (document.hidden) { clearControls(); if (G.state === 'playing') G.state = 'paused'; } });
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -919,8 +976,8 @@ loadAssets().then(() => {
   if (patDirt) patScale(patDirt, IMG.dirt);
   if (patRock) patScale(patRock, IMG.rock);
   document.getElementById('boot').style.display = 'none';
-  G.state = 'menu';
-  Audio2.setMusicState('menu');
+  if (devParams.has('level')) startLevel(devLevel);
+  else { G.state = 'menu'; Audio2.setMusicState('menu'); }
   requestAnimationFrame(frame);
 });
 

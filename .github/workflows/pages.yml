@@ -1,36 +1,60 @@
-name: Publish game to gh-pages
+name: Test and publish game
 
-# Auto-updates the live game on every push: splits the static site in public/
-# out to the `gh-pages` branch (game at root) and force-pushes it. The live
-# URL (raw.githack.com/<owner>/motogame/gh-pages/index.html) then serves the
-# latest build with no manual step. No GitHub Pages enablement required — this
-# only pushes a branch, which the default GITHUB_TOKEN is allowed to do.
+# Pull requests run the release gate. Pushes to a release branch also publish
+# public/ to gh-pages after every test passes.
 
 on:
   push:
     branches: [main, claude/moto-x3m-bike-game-ipwi7p]
     paths:
       - 'public/**'
+      - 'tools/**'
+      - 'package.json'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    branches: [main, claude/moto-x3m-bike-game-ipwi7p]
+    paths:
+      - 'public/**'
+      - 'tools/**'
+      - 'package.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: gh-pages-publish
+  group: gh-pages-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 0            # full history so `subtree split` works
+          node-version: 22
+      - name: Run release-gate tests
+        run: npm test
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages-publish
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Split public/ and force-push to gh-pages
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git subtree split --prefix public -b gh-pages-tmp
           git push origin gh-pages-tmp:gh-pages --force

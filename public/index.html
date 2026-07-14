@@ -27,10 +27,11 @@
 <canvas id="c"></canvas>
 <div id="dev"></div>
 <div id="boot">LOADING…</div>
+<script src="./version.js"></script>
 <script type="module" src="./game.js"></script>
 <script>
   // PWA: register the service worker for offline play + install
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('dev')) {
     addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
   }
   // capture the install prompt so the in-game INSTALL button can trigger it
