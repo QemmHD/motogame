@@ -2,6 +2,62 @@
 
 All notable Moto Rush X3 changes are recorded here so development can resume without reconstructing old decisions from source code. Dates use YYYY-MM-DD.
 
+## [1.5.0] — 2026-07-13 — Gold Standard (release candidate)
+
+This candidate is integrated on the feature branch and is not described as production-live until review, eligible-branch publishing, and canonical Pages/cache/offline smoke testing are complete.
+
+### Added
+
+- A repository-owned `public/golden-tapes.json` manifest with one browser-recorded recovery proof for all 15 current courses.
+- A local-only Chrome/Chromium golden generator that launches the real game, completes every built level, validates each emitted replay, and writes deterministic versioned output without external network access.
+- A browser verifier that validates manifest/token/catalog compatibility, replays every course twice in clean contexts, compares finish tick, run tick, elapsed/net time, score, recovery count, proof verdict, and repeated results, and fails on page errors.
+- Visible **GOLD ✓** badges on course cards, a **GOLD RUN** results action, an in-run Gold label, and **GOLD REFERENCE VERIFIED** finish status.
+- A DOM-free authoritative run-session module for terrain, bike physics, hazards, kinematic ground, scoring, checkpoint/crash/respawn/finish transitions, and proof-ready snapshots.
+- Trigger-controlled moving platforms with dormant solid state, explicit track sensors, local activation clocks, deterministic activation events, and Lift Logic's first teaching setup.
+- Exact kinematic checkpoint snapshot/restore, including activation state/tick and complete detached previous/current poses.
+- A DOM-free collision-proxy builder for terrain, bike circles/sweeps, hazards, platforms, checkpoints, and finish triggers with finite caps and detached renderer data.
+- An aligned development collision overlay, `C` toggle, `?dev&debug=collisions` route, count/tick legend, and screenshot evidence.
+- Player-facing messages for missing, incompatible, damaged, and oversized saved replay proofs.
+- Versioned documentation sections for releases, QA, screenshots, architecture/handoff, and store-style repository presentation.
+- A committed `package-lock.json` for reproducible browser-tool dependency resolution.
+
+### Changed
+
+- Browser simulation now records/selects input, advances `run-session.js` exactly once per fixed tick, and translates plain authoritative events into presentation instead of duplicating physics/rules/scoring logic in `game.js`.
+- Checkpoint retry restores exact triggered-platform motion phase rather than deriving all platform poses only from the restored hazard tick.
+- Replay final-state proof now uses the richer authoritative session snapshot, including session/run/platform ticks, scoring state, expanded bike/hazard state, and platform activation.
+- `Course.platform()` now preserves `startActive` and absolute/relative trigger authoring metadata.
+- Lift Logic's first vertical deck begins dormant and activates from a visible sensor before the rider reaches it.
+- The service-worker precache now includes run-session, debug-proxy, and repository Gold Run data.
+- Runtime/package release identity advances to `1.5.0`; course compatibility advances to `course-3`; physics remains `physics-3`.
+- The complete npm gate now includes asset/offline, 44 system tests, the 15-route physics gate, and repeated browser verification of all 15 Gold Runs.
+
+### Fixed
+
+- Browser lifecycle and Node fixtures can no longer drift on score order, checkpoint capture, crash timing, automatic/manual respawn, fallout, or finish arithmetic because they consume the same run-session authority.
+- Triggered moving decks no longer lose their active state or restart at the wrong phase after a checkpoint retry.
+- Kinematic snapshot restore rejects malformed, nonfinite, duplicate, missing, mismatched, or geometrically inconsistent data atomically before mutating runtime state.
+- Repository reference playback cannot silently masquerade as an ordinary saved proof; its source and verified verdict remain visible.
+- Stale local proof rejection no longer silently starts an unrelated normal run.
+- Collision inspection no longer depends on querying or mutating authoritative contact state.
+- New public runtime modules and reference data cannot silently fall out of offline packaging.
+
+### Verification
+
+- **Asset/offline:** 3 subtests validate the complete public runtime, local references, literal precache, and critical simulation/proxy modules.
+- **Deterministic systems:** 44 subtests cover rules/restart, replay, kinematics, ragdoll, authoritative run sessions, and collision proxies.
+- **Physics/routes:** all 15 authored courses pass terrain/hazard-aware completion, checkpoint, stability, finite-state, and speed assertions.
+- **Gold Runs:** all 15 checked-in tapes replay twice in clean browser contexts—30 verified runs with no divergence or page errors.
+- **Visual QA:** desktop Gold menu, sensor lift, collision overlay, verified Gold finish, and 390 × 844 mobile menu captures were reviewed and committed under `docs/screenshots/v1.5/`.
+- The generator produced byte-identical output across independent same-build runs before the final manifest was checked in.
+
+### Remaining before production sign-off
+
+- Merge through an eligible branch, confirm the GitHub Pages workflow, then smoke-test visible `v1.5.0`, cache replacement, offline reload, install, audio, reduced motion, keyboard, multitouch, and gamepad flows on the canonical URL.
+- Replace automation recovery references with separately classified clean human safe/apex tapes where U10/U14 requires them; current recovery counts are evidence, not a difficulty claim.
+- Measure mobile p95 frame time and allocations, pool hot visual effects, and complete the U03 performance gate.
+- Add force zones, arbitrary moving/closed chains, rotating/broader platforms, breakable ground, wheelie feedback, surface audio, PB ghosts, and future world packs through their roadmap dependencies.
+
 ## [1.4.0] — 2026-07-13 — Proof & Platforms (release candidate)
 
 This candidate is integrated in the current worktree. It is not described as production-live until the reviewed changes reach an eligible publish branch, the Pages workflow succeeds, and the canonical URL passes a smoke test.

@@ -87,6 +87,8 @@ function normaliseDefinition(definition, index) {
     y: finite(definition.y),
     width,
     height,
+    startActive: definition.startActive !== false,
+    triggerX: Number.isFinite(definition.triggerX) ? definition.triggerX : null,
     surface: String(definition.surface || 'metal'),
     render: deepFreeze(clonePlain(definition.render || {})),
     motion: normaliseMotion(definition.motion),
@@ -163,6 +165,48 @@ function stationaryPose(pose) {
   return { ...pose, dx: 0, dy: 0, vx: 0, vy: 0 };
 }
 
+function baseRuntimePose(definition, runTick) {
+  const x = definition.x;
+  const y = definition.y;
+  return {
+    id: definition.id,
+    tick: runTick,
+    motionTick: 0,
+    active: false,
+    activationTick: null,
+    x,
+    y,
+    width: definition.width,
+    height: definition.height,
+    left: x - definition.width * 0.5,
+    right: x + definition.width * 0.5,
+    top: y - definition.height * 0.5,
+    bottom: y + definition.height * 0.5,
+    motionProgress: 0,
+    surface: definition.surface,
+    dx: 0,
+    dy: 0,
+    vx: 0,
+    vy: 0,
+  };
+}
+
+function activeRuntimePose(definition, runTick, motionTick, tickRate, activationTick) {
+  return {
+    ...poseAtNormalised(definition, motionTick, tickRate),
+    tick: runTick,
+    motionTick,
+    active: true,
+    activationTick,
+  };
+}
+
+function initialPlatformPose(definition, runTick, tickRate) {
+  if (!definition.startActive) return baseRuntimePose(definition, runTick);
+  // Always-active definitions retain the original global fixed-tick phase.
+  return stationaryPose(activeRuntimePose(definition, runTick, runTick, tickRate, 0));
+}
+
 /** Return a pure authored-platform pose at an integer simulation tick. */
 export function platformPoseAt(definition, tick, tickRate = KINEMATIC_TICK_RATE) {
   const rate = positive(tickRate, KINEMATIC_TICK_RATE);
@@ -193,11 +237,13 @@ export function createKinematicRun(definitions = [], options = {}) {
     platforms: [],
   };
   run.platforms = immutableDefinitions.map((definition) => {
-    const current = stationaryPose(poseAtNormalised(definition, startTick, tickRate));
+    const current = initialPlatformPose(definition, startTick, tickRate);
     return {
       id: definition.id,
       definition,
       tickRate,
+      active: definition.startActive,
+      activationTick: definition.startActive ? 0 : null,
       previous: { ...current },
       current,
       pose: current,
@@ -215,7 +261,15 @@ export function stepKinematicRun(run, tickCount = 1) {
     run.tick++;
     for (const platform of run.platforms) {
       platform.previous = platform.current;
-      platform.current = poseAtNormalised(platform.definition, run.tick, run.tickRate);
+      platform.current = platform.active
+        ? activeRuntimePose(
+          platform.definition,
+          run.tick,
+          run.tick - platform.activationTick,
+          run.tickRate,
+          platform.activationTick,
+        )
+        : baseRuntimePose(platform.definition, run.tick);
       platform.pose = platform.current;
     }
   }
@@ -227,9 +281,9 @@ export function resetKinematicRun(run, tick = run?.startTick ?? 0) {
   if (!run || !Array.isArray(run.platforms)) throw new TypeError('Invalid kinematic run');
   run.tick = Math.trunc(finite(tick));
   for (const platform of run.platforms) {
-    const current = stationaryPose(
-      poseAtNormalised(platform.definition, run.tick, run.tickRate),
-    );
+    platform.active = platform.definition.startActive;
+    platform.activationTick = platform.active ? 0 : null;
+    const current = initialPlatformPose(platform.definition, run.tick, run.tickRate);
     platform.previous = { ...current };
     platform.current = current;
     platform.pose = current;
@@ -239,6 +293,196 @@ export function resetKinematicRun(run, tick = run?.startTick ?? 0) {
 
 export function getKinematicPlatform(run, id) {
   return run.platforms.find((platform) => platform.id === id) || null;
+}
+
+/**
+ * Start a dormant platform's local motion clock at tick zero on the current
+ * fixed run tick. Returns false for a missing id or an already-active platform.
+ */
+export function activateKinematicPlatform(run, id) {
+  if (!run || !Array.isArray(run.platforms)) throw new TypeError('Invalid kinematic run');
+  const platform = getKinematicPlatform(run, id);
+  if (!platform || platform.active) return false;
+  platform.active = true;
+  platform.activationTick = run.tick;
+  const current = stationaryPose(activeRuntimePose(
+    platform.definition, run.tick, 0, run.tickRate, platform.activationTick,
+  ));
+  platform.previous = { ...current };
+  platform.current = current;
+  platform.pose = current;
+  return true;
+}
+
+/**
+ * Stop a platform and deterministically reset it to its authored base pose.
+ * The deck remains solid; reactivation always starts a fresh local tick zero.
+ */
+export function deactivateKinematicPlatform(run, id) {
+  if (!run || !Array.isArray(run.platforms)) throw new TypeError('Invalid kinematic run');
+  const platform = getKinematicPlatform(run, id);
+  if (!platform || !platform.active) return false;
+  platform.active = false;
+  platform.activationTick = null;
+  const current = baseRuntimePose(platform.definition, run.tick);
+  platform.previous = { ...current };
+  platform.current = current;
+  platform.pose = current;
+  return true;
+}
+
+const SNAPSHOT_POSE_KEYS = Object.freeze([
+  'id', 'tick', 'motionTick', 'active', 'activationTick',
+  'x', 'y', 'width', 'height', 'left', 'right', 'top', 'bottom',
+  'motionProgress', 'surface', 'dx', 'dy', 'vx', 'vy',
+]);
+const SNAPSHOT_PLATFORM_KEYS = Object.freeze([
+  'id', 'active', 'activationTick', 'previous', 'current',
+]);
+
+function snapshotPlainObject(value, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new TypeError(`${label} must be a plain object`);
+  }
+}
+
+function snapshotExactKeys(value, keys, label) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length
+      || actual.some((key, index) => key !== expected[index])) {
+    throw new TypeError(`${label} has unexpected or missing fields`);
+  }
+}
+
+function snapshotInteger(value, label) {
+  if (!Number.isSafeInteger(value)) throw new TypeError(`${label} must be a safe integer`);
+  return value;
+}
+
+function copySnapshotPose(pose) {
+  return Object.fromEntries(SNAPSHOT_POSE_KEYS.map(key => [key, pose[key]]));
+}
+
+function validateSnapshotPose(pose, record, platform, runTick, label, currentPose) {
+  snapshotPlainObject(pose, label);
+  snapshotExactKeys(pose, SNAPSHOT_POSE_KEYS, label);
+  if (pose.id !== record.id) throw new Error(`${label} platform id does not match`);
+  if (pose.active !== record.active) throw new Error(`${label} active state does not match`);
+  if (pose.activationTick !== record.activationTick) {
+    throw new Error(`${label} activation tick does not match`);
+  }
+  if (typeof pose.surface !== 'string' || pose.surface !== platform.definition.surface) {
+    throw new Error(`${label} surface does not match authored platform`);
+  }
+  if (pose.width !== platform.definition.width || pose.height !== platform.definition.height) {
+    throw new Error(`${label} dimensions do not match authored platform`);
+  }
+
+  snapshotInteger(pose.tick, `${label}.tick`);
+  snapshotInteger(pose.motionTick, `${label}.motionTick`);
+  const finiteKeys = [
+    'x', 'y', 'width', 'height', 'left', 'right', 'top', 'bottom',
+    'motionProgress', 'dx', 'dy', 'vx', 'vy',
+  ];
+  for (const key of finiteKeys) {
+    if (!Number.isFinite(pose[key])) throw new TypeError(`${label}.${key} must be finite`);
+  }
+  if (currentPose ? pose.tick !== runTick : pose.tick !== runTick && pose.tick !== runTick - 1) {
+    throw new Error(`${label}.tick is not aligned with the run tick`);
+  }
+
+  const tolerance = 1e-7;
+  if (Math.abs(pose.left - (pose.x - pose.width * 0.5)) > tolerance
+      || Math.abs(pose.right - (pose.x + pose.width * 0.5)) > tolerance
+      || Math.abs(pose.top - (pose.y - pose.height * 0.5)) > tolerance
+      || Math.abs(pose.bottom - (pose.y + pose.height * 0.5)) > tolerance) {
+    throw new Error(`${label} rectangle geometry is inconsistent`);
+  }
+  if (!record.active && (pose.motionTick !== 0 || pose.dx !== 0 || pose.dy !== 0
+      || pose.vx !== 0 || pose.vy !== 0)) {
+    throw new Error(`${label} inactive pose must be stationary at motion tick zero`);
+  }
+  return copySnapshotPose(pose);
+}
+
+function validateKinematicSnapshot(run, snapshot) {
+  if (!run || !Array.isArray(run.platforms)) throw new TypeError('Invalid kinematic run');
+  snapshotPlainObject(snapshot, 'kinematic snapshot');
+  snapshotExactKeys(snapshot, ['tick', 'platforms'], 'kinematic snapshot');
+  const tick = snapshotInteger(snapshot.tick, 'kinematic snapshot tick');
+  if (!Array.isArray(snapshot.platforms)) {
+    throw new TypeError('kinematic snapshot platforms must be an array');
+  }
+  if (snapshot.platforms.length !== run.platforms.length) {
+    throw new Error('kinematic snapshot platform count does not match run');
+  }
+
+  const byId = new Map(run.platforms.map(platform => [platform.id, platform]));
+  const seen = new Set();
+  const restored = [];
+  for (let index = 0; index < snapshot.platforms.length; index++) {
+    const record = snapshot.platforms[index];
+    const label = `kinematic snapshot platform ${index}`;
+    snapshotPlainObject(record, label);
+    snapshotExactKeys(record, SNAPSHOT_PLATFORM_KEYS, label);
+    if (typeof record.id !== 'string' || seen.has(record.id) || !byId.has(record.id)) {
+      throw new Error(`${label} has an unknown or duplicate id`);
+    }
+    seen.add(record.id);
+    if (typeof record.active !== 'boolean') throw new TypeError(`${label}.active must be boolean`);
+    if (record.active) snapshotInteger(record.activationTick, `${label}.activationTick`);
+    else if (record.activationTick !== null) {
+      throw new TypeError(`${label}.activationTick must be null while inactive`);
+    }
+
+    const platform = byId.get(record.id);
+    const previous = validateSnapshotPose(
+      record.previous, record, platform, tick, `${label}.previous`, false,
+    );
+    const current = validateSnapshotPose(
+      record.current, record, platform, tick, `${label}.current`, true,
+    );
+    restored.push({ platform, active: record.active,
+      activationTick: record.activationTick, previous, current });
+  }
+  return { tick, restored };
+}
+
+/** Return a detached, JSON-safe fixed-tick checkpoint of moving-ground state. */
+export function snapshotKinematicRun(run) {
+  if (!run || !Array.isArray(run.platforms)) throw new TypeError('Invalid kinematic run');
+  const snapshot = {
+    tick: run.tick,
+    platforms: run.platforms.map(platform => ({
+      id: platform.id,
+      active: platform.active,
+      activationTick: platform.activationTick,
+      previous: copySnapshotPose(platform.previous),
+      current: copySnapshotPose(platform.current),
+    })),
+  };
+  validateKinematicSnapshot(run, snapshot);
+  return snapshot;
+}
+
+/**
+ * Atomically restore a checkpoint created by snapshotKinematicRun(). Validation
+ * completes before the live run is changed, and neither input nor definitions
+ * are retained or mutated.
+ */
+export function restoreKinematicRun(run, snapshot) {
+  const validated = validateKinematicSnapshot(run, snapshot);
+  run.tick = validated.tick;
+  for (const state of validated.restored) {
+    state.platform.active = state.active;
+    state.platform.activationTick = state.activationTick;
+    state.platform.previous = state.previous;
+    state.platform.current = state.current;
+    state.platform.pose = state.current;
+  }
+  return run;
 }
 
 /**
@@ -265,6 +509,9 @@ export function sampleKinematicPlatform(platform, alpha = 1) {
     bottom: y + height * 0.5,
     motionProgress: previous.motionProgress
       + (current.motionProgress - previous.motionProgress) * amount,
+    motionTick: current.motionTick ?? current.tick,
+    active: platform.active ?? current.active ?? true,
+    activationTick: platform.activationTick ?? current.activationTick ?? null,
     surface: current.surface,
     render: platform.definition?.render || {},
   };
@@ -420,6 +667,8 @@ export function resolveCircleOnPlatform(circle, platform, options = {}) {
 
   return {
     platformId: platform.id || current.id,
+    active: platform.active ?? current.active ?? true,
+    activationTick: platform.activationTick ?? current.activationTick ?? null,
     kind: resting ? 'resting' : 'swept',
     toi,
     normalX: 0,

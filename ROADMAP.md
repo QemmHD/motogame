@@ -37,7 +37,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
 
-**Current evidence:** The v1.4 gate contains 3 asset/offline subtests, 28 deterministic system subtests, and a 15-level headless physics/rules route pass. Local browser smoke covers proof recording/playback, tap retry, moving ground, responsive layout, and an error-free console. Production URL and offline-update smoke evidence must still be recorded for the candidate actually deployed.
+**Current evidence:** The v1.5 gate contains 3 asset/offline subtests, 44 deterministic system subtests, a 15-level headless physics/rules route pass, and 15 checked-in browser proofs replayed twice. Local visual QA covers repository references, triggered ground, collision alignment, verified finish UI, responsive layout, and an error-free console. Production URL and offline-update smoke evidence must still be recorded for the candidate actually deployed.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -51,7 +51,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Restarting 50 times produces identical initial state; rules fixtures match browser behavior; keyboard, touch, and gamepad restart smoke tests pass; no previous-run hazard state survives.
 
-**Current evidence:** Fifty repeated full restarts and checkpoint restores reproduce their expected state in the rules suite. Checkpoints now snapshot tick, checkpoint index, and hazard runtime state; platforms reset to the restored tick. Browser input-device smoke coverage, complete reset ownership, and browser-module extraction remain open, so U02 stays partial.
+**Current evidence:** Fifty repeated rules restarts/checkpoint restores reproduce expected state, and the v1.5 DOM-free run session is now the shared browser/test authority for physics, hazards, platforms, scoring, crash/respawn, and finish transitions. Checkpoints restore exact hazard and triggered-platform snapshots. Full keyboard/touch/gamepad restart smoke, presentation reset ownership, and further browser-module extraction remain open, so U02 stays partial.
 
 ### U03 / v1.5 — Smooth Ride Pass
 
@@ -79,7 +79,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Fast-mover fixtures cannot tunnel; dormant features leave baseline runs unchanged; one-way terrain does not trap the bike; inherited platform speed is bounded; debug contacts align with rendered geometry.
 
-**Current evidence:** Solid platform tops now pass high-speed swept-crossing, ten-cycle carry, exact reset, definition-immutability, and bounded-inheritance tests. Force zones, general moving chains, and an art/proxy debug-overlay review remain open, so the collision keystone is not accepted as complete.
+**Current evidence:** Solid platform tops pass high-speed swept crossing, ten-cycle carry, exact activated checkpoint restore, definition immutability, and bounded inheritance. A finite detached proxy builder and browser overlay now align terrain, bike sweeps, hazards, decks, checkpoints, and finish triggers with rendered art; the reviewed capture is stored under `docs/screenshots/v1.5/`. Force zones and general moving/closed chains remain open, so the collision keystone is not accepted as complete.
 
 ## Phase II — Make every run satisfying
 
@@ -137,9 +137,11 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Identical ticks produce identical poses; maximum-speed swept kills pass; every machine telegraphs its danger; level definitions remain immutable.
 
+**Current evidence:** Patrol saws, pendulums, crushers, Nitro, and moving platforms use deterministic fixed-tick transforms and immutable authored definitions. Lift Logic now includes a visible sensor-triggered lift with a local activation timeline and presentation cue. A shared general hazard registry, complete warning-audio/art language, multi-machine trigger graphs, and manually verified safe/fast solutions remain open.
+
 ### U09 / v2.1 — Run Tapes and Proof Replays
 
-**Status:** PLAYABLE PREVIEW
+**Status:** RELEASE CANDIDATE
 
 **Player promise:** Replay the last run and trust that reference times came from a real, reproducible ride.
 
@@ -149,7 +151,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Replaying every tape repeatedly yields the same finish tick and hash; incompatible versions fail with a clear message; every campaign course has a passing tape.
 
-**Current evidence:** Normal finishes record compact RLE input, persist the last tape by level, and verify playback using finish tick plus a canonical final-state hash. Unit coverage includes restart bits, malformed/oversized data, version mismatch, random tick lookup, and a reproduced physics finish. Repository-owned golden tapes for all 15 courses, repeated browser playback, and player-facing stale-tape messaging remain open.
+**Current evidence:** Normal finishes record compact RLE input and persist the player's last tape by level. The v1.5 repository adds one recovery proof for all 15 current courses, a deterministic generator, and a verifier that replays every tape twice in clean browser contexts. All 30 passes match finish/state hash, ticks, time, score, and recoveries. Missing, stale, damaged, oversized, or incompatible player tapes now produce explicit messages. Production deployment smoke remains under U01; human clean/safe/apex classification remains under U10/U14, not this proof-format gate.
 
 ## Phase III — Build the machine sandbox
 
@@ -165,7 +167,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** An idle rider stays stable for ten platform cycles; inherited velocity is clamped; safe and apex routes both have golden tapes.
 
-**Current evidence:** Axis-aligned solid decks pass idle-circle and full-bike ten-cycle carry, swept landing, bounded carry/launch inheritance, deterministic pose, and exact reset tests. Freight Flight, Lift Logic, and Proof Circuit use them in recoverable layouts. Trigger-controlled lifts, broader moving geometry, dedicated camera cues, and golden safe/apex tapes remain open.
+**Current evidence:** Axis-aligned solid decks pass idle-circle and full-bike ten-cycle carry, swept landing, bounded carry/launch inheritance, deterministic pose, and exact activated checkpoint restore tests. Freight Flight, Lift Logic, and Proof Circuit use recoverable layouts; Lift Logic now teaches a sensor-triggered lift with a visible state and camera/audio cue. The collision overlay audits its rectangle. Broader/rotating geometry and separately classified human safe/apex tape pairs remain open.
 
 ### U11 / v2.3 — Nitro Chain Reactions
 
@@ -215,7 +217,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Twelve golden tapes; safe and risky routes manually verified; checkpoints precede lethal tests; three-star times derive from recorded rides; onboarding assumes no genre knowledge.
 
-**Current evidence:** The original 12 courses remain headlessly completable and now sit beside a separate three-course R&D Yard. This does not satisfy U14: golden tapes, recorded star derivation, and human safe/risky-route and onboarding QA are still missing.
+**Current evidence:** The original 12 campaign courses remain headlessly completable and now each have a repeatedly verified repository recovery tape; three R&D Yard trials remain separate. This still does not satisfy U14: recorded human star derivation plus safe/risky-route, touch, and onboarding QA are missing.
 
 ### U15 / v2.7 — Closed-Course Geometry
 
@@ -341,7 +343,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Ghost and authoritative replay converge at every checkpoint; physics mismatch hides the ghost safely; pruning preserves best records.
 
-**Current evidence:** The v1.4 tape format, one-tape-per-level persistence, fixed-tick playback, and mismatch rejection are reusable foundations. There is no translucent ghost, PB-only selection, split comparison, or storage pruning yet, so U24 remains planned.
+**Current evidence:** The v1.5 tape format, all-course reference catalog, one-player-tape-per-level persistence, fixed-tick playback, richer authoritative snapshots, and visible mismatch rejection are reusable foundations. There is no translucent ghost, PB-only selection, split comparison, or storage pruning yet, so U24 remains planned.
 
 ### U25 / v3.7 — Daily Relay Run
 
@@ -423,15 +425,15 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Immediate execution queue
 
-After the v1.4 Proof & Platforms candidate reaches a stable final diff:
+After the v1.5 Gold Standard candidate reaches a stable final diff:
 
-1. Run the complete 3-asset / 28-system / 15-level gate, finish the remaining input/accessibility smoke matrix, deploy, and verify the production cache and visible `v1.4.0` label.
-2. Finish U02 with browser restart parity, explicit reset ownership for every presentation subsystem, and smaller orchestration modules.
+1. Run the complete 3-asset / 44-system / 15-route / 30-browser-replay gate, finish the remaining input/accessibility smoke matrix, deploy, and verify the production cache and visible `v1.5.0` label.
+2. Finish U02 with keyboard/touch/gamepad restart parity, explicit reset ownership for every presentation subsystem, and additional renderer/input/audio/persistence extraction.
 3. Finish U03 with pools, allocation/frame instrumentation, rotation tests, and a measured mobile p95 budget.
-4. Finish U04/U10 with force zones, collision proxy overlays, triggered platforms, camera cues, and safe/apex proof tapes.
+4. Finish U04/U10 with force zones, broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
 5. Finish U05/U07 presentation acceptance with original rider-part polish, browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
-6. Record repository-owned golden tapes and human keyboard/touch reference runs for all 15 courses; derive star targets and document safe, stunt, and recovery routes.
-7. Build PB Echoes and challenge links on the proven tape format only after golden replay stability is demonstrated across the campaign.
+6. Record human keyboard/touch references for all 15 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
+7. Build PB Echoes and challenge links on the now campaign-proven tape format, keeping version mismatch and storage pruning explicit.
 
 ## Update discipline
 

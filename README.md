@@ -7,91 +7,90 @@
 <p align="center"><strong>Send it. Land it. Prove it.</strong></p>
 
 <p align="center">
-  An original, momentum-driven 2D stunt racer about learning wild trails,
-  riding moving machinery, and turning one more restart into a cleaner run.
+  An original momentum-driven motorcycle stunt racer built for instant browser play,
+  recoverable machine routes, expressive landings, and runs you can verify.
 </p>
 
 <p align="center">
   <a href="https://qemmhd.github.io/motogame/"><strong>PLAY THE CURRENT LIVE BUILD</strong></a>
   &nbsp;&middot;&nbsp;
+  <a href="docs/releases/v1.5.0.md">v1.5 update</a>
+  &nbsp;&middot;&nbsp;
   <a href="ROADMAP.md">30-update roadmap</a>
   &nbsp;&middot;&nbsp;
-  <a href="CHANGELOG.md">Release history</a>
-  &nbsp;&middot;&nbsp;
-  <a href="docs/PROJECT_STATE.md">Developer pickup</a>
+  <a href="docs/README.md">documentation hub</a>
 </p>
 
 <p align="center">
-  <img alt="v1.4.0 release candidate" src="https://img.shields.io/badge/release-v1.4.0%20candidate-6f43d6">
+  <img alt="v1.5.0 release candidate" src="https://img.shields.io/badge/release-v1.5.0%20candidate-bb8612">
   <img alt="15 courses" src="https://img.shields.io/badge/courses-15-ff5a3c">
+  <img alt="15 verified Gold Runs" src="https://img.shields.io/badge/Gold%20Runs-15%2F15-ffd23e">
   <img alt="offline PWA" src="https://img.shields.io/badge/PWA-offline--ready-2b9f71">
-  <img alt="no build framework" src="https://img.shields.io/badge/runtime-vanilla%20Canvas%202D-2764d9">
+  <img alt="Canvas 2D" src="https://img.shields.io/badge/runtime-Canvas%202D-2764d9">
 </p>
 
 ---
 
-## The ride
+## Gold Standard gallery
 
-Moto Rush X3 is a browser-first motorcycle physics game. Balance a physical bike across hand-built terrain, preserve momentum through graded landings, find faster stunt lines, and learn when the machinery itself is the best route.
-
-The **v1.4.0 Proof & Platforms** wave grows the release candidate to 15 courses and adds the first R&D Yard trials. It also connects deterministic checkpoint restoration, last-run proof replays, solid moving platforms, crash ragdolls, landing grades, five-speed engine feedback, and a larger automated release gate.
-
-## v1.4 gallery
-
-| R&D Yard course menu | Freight platform route |
+| Every course has a reference | Machinery reacts to the rider |
 |:---:|:---:|
-| ![R&D Yard level selection](docs/update-v14-menu.png) | ![Motorcycle approaching a moving freight platform](docs/update-v14-platforms.png) |
+| ![R&D Yard with Gold reference badges](docs/screenshots/v1.5/update-v15-golden-menu.png) | ![Lift Logic sensor-controlled platform](docs/screenshots/v1.5/update-v15-trigger-lift.png) |
 
-| Crash theater | Verified last-run replay |
+| Art and collision stay aligned | The finish proves the run |
 |:---:|:---:|
-| ![Crash ragdoll theater](docs/update-v14-crash.png) | ![Verified replay proof result](docs/update-v14-replay.png) |
+| ![Collision proxy development overlay](docs/screenshots/v1.5/update-v15-collision-debug.png) | ![Gold reference verified result](docs/screenshots/v1.5/update-v15-golden-verified.png) |
 
 <p align="center">
-  <img src="docs/update-v14-mobile.png" alt="Moto Rush X3 responsive mobile storefront" width="430">
+  <img src="docs/screenshots/v1.5/update-v15-mobile.png" alt="Moto Rush X3 mobile course storefront" width="390">
 </p>
+
+## The ride
+
+Moto Rush X3 is a browser-first 2D motorcycle game about carrying momentum through hand-built terrain. The bike has physical wheels, suspension, lean, airborne rotation, landing grades, crash state, and surface response. Courses mix readable safe ground with faster stunt opportunities and deterministic machinery.
+
+The **v1.5.0 Gold Standard** release candidate makes every current course independently reproducible. Fifteen checked-in recovery tapes are recorded by the real browser runtime and replayed twice by the release gate. The game exposes those references as Gold Runs, while still keeping the player's own last-run replay separate.
+
+### What makes it ours
+
+- **Momentum Machines:** freight decks, lifts, saw patrols, pendulums, crushers, Nitro pressure waves, boost rails, ice, and bouncy membranes can change a line without replacing rider skill.
+- **Readable recovery:** checkpoints and forgiving ground routes keep experimentation fast; failures restore exact hazard and platform timelines.
+- **Physical feedback:** perfect, clean, rough, and slam landings affect momentum and trigger distinct score, camera, particle, haptic, and audio responses.
+- **Proof-first competition:** compact fixed-tick input tapes carry build, physics, and course identities, then verify their finish tick and authoritative state hash.
+- **Original trail anthology:** Canyon Run, Stormworks, and R&D Yard use original names, layouts, systems, tuning, art direction, and presentation.
 
 ## Current game
 
-- **15 handcrafted courses** across Canyon Run, Stormworks, and the new R&D Yard.
-- **Physical motorcycle simulation** with wheel contacts, suspension response, lean control, flips, landing grades, momentum retention, crashes, checkpoints, and timed finishes.
-- **Machine playgrounds** with patrol saws, pendulums, crushers, Nitro crates, freight shuttles, vertical lifts, ice, boost rails, and bouncy membranes.
-- **Solid kinematic decks** that move on deterministic 60 Hz paths, carry the bike, catch fast crossings, and pass bounded velocity to a launch.
-- **Proof of the last finish** through compact fixed-tick input tapes, deterministic state hashes, and build/physics/course compatibility checks.
-- **Crash theater** with a separate segmented bike-and-rider ragdoll and a static reduced-motion presentation.
-- **Reactive sound and HUD feedback** with five engine gears, load-sensitive pitch, landing audio, score callouts, and proof status.
-- **Desktop and mobile controls** through keyboard and Pointer Events, including simultaneous touch, cancellation cleanup, pause handling, haptics, and reduced motion.
-- **Installable offline PWA** with a complete, versioned service-worker precache and test-gated Pages publishing.
-- **Local progression** for unlocks, stars, best times, best scores, settings, and one completed replay tape per level.
+- **15 handcrafted courses** across Canyon Run, Stormworks, and R&D Yard.
+- **15 repository Gold Runs** available from the results screen and marked on course cards.
+- **One authoritative run session** shared by browser play and deterministic tests for bike physics, hazards, moving ground, scoring, checkpoint recovery, crashes, and finishes.
+- **Solid moving platforms** with swept top collision, stable bike carry, bounded inherited velocity, and sensor-triggered local timelines.
+- **Crash theater** with a deterministic segmented bike/rider ragdoll plus a static reduced-motion alternative.
+- **Last-run player proofs** stored locally and clearly rejected when missing, damaged, oversized, level-mismatched, or version-incompatible.
+- **Five-band engine response** driven by road speed, load, grounding, and throttle, with landing and stunt audio.
+- **Keyboard, Pointer Event, touch, and gamepad input** with simultaneous controls, cancellation cleanup, pause/focus handling, haptics, and reduced motion.
+- **Installable offline PWA** with a literal, versioned, test-audited service-worker cache.
+- **Local progression** for unlocks, stars, best time, best score, settings, and the most recent completed proof per course.
 
-## What is new in v1.4
+## What is new in v1.5
 
-### R&D Yard: levels 13-15
+### Gold Runs for all 15 courses
 
-**Freight Flight**, **Lift Logic**, and **Proof Circuit** introduce moving-ground routes above recoverable service roads. Their rails and lifts combine existing surfaces and machines without replacing the original 12-course campaign.
+`public/golden-tapes.json` contains one browser-recorded recovery reference for each current course. The verifier launches a clean local browser, confirms compatibility and catalog identity, replays every token twice, and rejects any mismatch in finish state, ticks, time, score, recoveries, or browser errors.
 
-### Deterministic retry and replay proof
+### Sensor-controlled machinery
 
-Full restarts rebuild authored initial state. Checkpoint retries restore a captured run snapshot, including the machine tick and hazard runtime state, then reset moving platforms to the same tick. A successful normal run stores compact gas, brake, lean, and fixed-tick crash-respawn input. Replay checks the finish tick and a canonical final-state hash against matching schema, level, build, physics, and course versions.
+Lift Logic now teaches the first triggered moving deck. A dormant platform remains solid at its authored base pose. Crossing its track sensor begins local motion tick zero, produces a clear cue, and records activation state in checkpoint and replay proof data.
 
-### Platforms you can actually ride
+### Authoritative restart contract
 
-The new kinematic system uses solid, one-way rectangular tops rather than decorative hazard radii. It supports deterministic authored paths, interpolation for drawing, high-speed swept landings, stable wheel carry, bounded surface velocity, and bounded launch inheritance.
+`public/run-session.js` owns the fixed-step lifecycle. Full restarts rebuild authored state. Checkpoint retries restore hazards plus exact platform activation, previous/current poses, and motion phase. Browser presentation consumes plain events instead of reimplementing scoring and rules.
 
-### Bike-and-rider physicality
+### Collision audit view
 
-Perfect, clean, rough, and slam landings now communicate how much momentum the bike keeps. The engine shifts through five visible bands and changes pitch with road speed, throttle, airborne revs, and load. Crashes hand the camera to a finite, terrain-aware ragdoll; reduced motion switches to a readable static pose and removes the strongest camera effects.
+The development overlay shows terrain segments, wheel/head circles and sweeps, hazard proxies, platform rectangles, checkpoint lines, and the finish trigger over their rendered models. Data is finite, capped, detached, and covered by alignment/immutability tests.
 
-### Larger release evidence
-
-The current gate contains **3 asset/offline subtests**, **28 deterministic system subtests**, and a **15-level headless physics/rules route gate**. These checks prove important invariants; they do not replace final keyboard, touch, audio, install, service-worker, and human difficulty QA.
-
-See the exact release record in [CHANGELOG.md](CHANGELOG.md).
-
-## Release-candidate honesty
-
-`v1.4.0` describes the current repository worktree. It is not claimed as the production build until the reviewed change reaches an eligible publish branch, the Pages workflow succeeds, and the canonical URL is smoke-tested.
-
-The current replay is a last-run proof, not yet a personal-best ghost, daily event, or share link. R&D Yard has three focused trials rather than a full six-level art pack. Platforms are solid axis-aligned decks, not arbitrary moving terrain. Star targets and alternate routes still require broader human keyboard and touch calibration.
+Read the full, screenshot-backed release record in [docs/releases/v1.5.0.md](docs/releases/v1.5.0.md).
 
 ## Controls
 
@@ -99,80 +98,106 @@ The current replay is a last-run proof, not yet a personal-best ghost, daily eve
 |---|---|---|
 | Accelerate | Up arrow or `W` | Gas button |
 | Brake / reverse | Down arrow or `S` | Brake button |
-| Lean back | Left arrow or `A` | Left rotate button |
-| Lean forward | Right arrow or `D` | Right rotate button |
+| Lean back / backflip | Left arrow or `A` | Left rotate button |
+| Lean forward / frontflip | Right arrow or `D` | Right rotate button |
 | Pause | `Esc` or `P` | Pause button |
 | Restart level | `R` | Retry button / paused menu |
-| Retry checkpoint after a crash | Space, Enter, or primary action | Tap the crash overlay |
-| Replay completed run | Results screen | Replay button |
+| Retry checkpoint after crash | Space, Enter, or primary action | Tap the crash overlay |
+| Replay the player's finish | Results screen | Replay button |
+| Play repository reference | `G` on results | Gold Run button |
+| Toggle collision proxies | `C` in development mode | Development-only |
 
 ## Run locally
 
-The shipped game has no compilation step. Serve `public/` through a static HTTP server:
+The shipped game has no compilation step. Serve `public/` through HTTP:
 
 ```powershell
 python -m http.server 8080 --directory public
 ```
 
-Then open `http://127.0.0.1:8080/`.
+Open `http://127.0.0.1:8080/`.
 
-Run the complete release gate:
+Install the pinned repository tooling and run the full gate:
 
 ```powershell
+npm install
 npm test
 ```
 
-Focused suites are also available:
+The v1.5 gate covers:
+
+- 3 asset/offline subtests;
+- 44 deterministic system subtests;
+- all 15 authored physics/rules routes;
+- all 15 Gold Runs replayed twice in clean browser contexts.
+
+Focused commands:
 
 ```powershell
-npm run test:assets
-npm run test:systems
-npm run test:physics
+npm run test:session
+npm run test:kinematics
+npm run test:debug
+npm run test:goldens
 ```
 
-Useful developer routes:
+Useful development routes:
 
-- `?dev&level=13` launches Freight Flight directly without registering the service worker.
-- `?dev&level=15&autoplay` launches Proof Circuit with development test input.
-- `?touch` forces touch controls for layout inspection.
+- `?dev&level=13` — Freight Flight.
+- `?dev&level=14` — Lift Logic and the sensor deck.
+- `?dev&level=15&autoplay` — deterministic Proof Circuit smoke input.
+- `?dev&level=14&debug=collisions` — aligned collision overlay.
+- `?dev&touch` — forced touch layout.
 
 ## Project reference
 
-| Document | Purpose |
+| Section | Purpose |
 |---|---|
-| [ROADMAP.md](ROADMAP.md) | Thirty numbered updates, dependencies, current evidence, and remaining acceptance gates |
-| [CHANGELOG.md](CHANGELOG.md) | Permanent release-by-release record of completed work |
-| [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) | Exact worktree handoff, gaps, checks, and next priorities |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Runtime modules, deterministic flow, invariants, and extension guides |
-| [design/FEEL_SPEC.md](design/FEEL_SPEC.md) | Bike-feel targets and tuning reference |
-| [design/assets.csv](design/assets.csv) | Art inventory and production tracking |
+| [Documentation hub](docs/README.md) | Release, QA, screenshot, architecture, and handoff index |
+| [v1.5 release brief](docs/releases/v1.5.0.md) | Current player-visible and technical update with images |
+| [Golden run QA](docs/qa/GOLDEN_TAPES.md) | Exact 15-course proof catalog and regeneration policy |
+| [Screenshot archive](docs/screenshots/README.md) | Versioned visual progress instead of overwritten images |
+| [30-update roadmap](ROADMAP.md) | Dependencies, promises, status, evidence, and acceptance gates |
+| [Changelog](CHANGELOG.md) | Permanent chronological release record |
+| [Project state](docs/PROJECT_STATE.md) | Canonical current branch/build pickup note |
+| [Architecture](docs/ARCHITECTURE.md) | Runtime modules, fixed-step flow, and invariants |
+| [Feel specification](design/FEEL_SPEC.md) | Bike feel and feedback targets |
+| [Asset inventory](design/assets.csv) | Art-production tracking |
 
 ## Repository layout
 
 ```text
-public/       Shipped Canvas game, PWA shell, simulation modules, levels, and assets
-tools/        Deterministic system, physics, replay, and release verification
-docs/         Store imagery, architecture, and current developer handoff
-design/       Feel specification and art inventory
-.github/      Test-gated GitHub Pages workflow and contribution checklists
+public/                 Shipped game, PWA shell, simulation modules, levels, assets, Gold Runs
+tools/                  Deterministic systems, route gates, browser generator, replay verifier
+docs/releases/          Screenshot-backed release briefs
+docs/qa/                Reproducible QA records and policies
+docs/screenshots/       Versioned desktop, gameplay, debug, proof, and mobile captures
+design/                 Feel specification and production asset inventory
+.github/                Test-gated Pages workflow and contribution templates
 ```
 
 ## Project information
 
 | | |
 |---|---|
-| **Current candidate** | v1.4.0 - Proof & Platforms |
-| **Course count** | 15 across three menu worlds |
+| **Current candidate** | v1.5.0 — Gold Standard |
+| **Course count** | 15 across three worlds |
+| **Reference coverage** | 15/15 repository recovery tapes, each verified twice |
 | **Format** | Static HTML, CSS, Canvas 2D, and native JavaScript modules |
 | **Distribution** | GitHub Pages / installable PWA |
 | **Canonical game** | <https://qemmhd.github.io/motogame/> |
 | **Persistence** | Browser `localStorage`; no account or backend required |
 | **Target** | Desktop and mobile browsers |
 
+## Release-candidate honesty
+
+`v1.5.0` describes this repository branch. The public play link may remain on an earlier production build until the pull request is reviewed, merged to an eligible branch, published by GitHub Pages, and smoke-tested at the canonical URL.
+
+Gold Runs are deterministic automation recovery references, not claims of clean human mastery or balanced star times. The R&D Yard is still a focused three-course lab. Current platforms are axis-aligned one-way decks. Safe/apex human tape pairs, wheelie balance feedback, richer surface audio, force zones, breakable terrain, more worlds, PB ghosts, challenge links, and Trail Forge remain on the roadmap.
+
 ## Originality promise
 
-Moto Rush X3 takes inspiration from the broad side-scrolling motorcycle stunt genre, but its code, systems, names, level layouts, tuning, visuals, and roadmap are built from first principles for this project. The project does not decompile competitors or copy proprietary source code, art, audio, UI layouts, exact tracks, or timing data.
+Moto Rush X3 learns from broad side-scrolling motorcycle and stunt-racing conventions, but it does not decompile competitors or copy proprietary code, assets, audio, UI layouts, exact tracks, or timing data. Its mechanics, code, names, layouts, tuning, visuals, and documentation are created for this project.
 
 ## Credits
 
-Created and directed by [QemmHD](https://github.com/QemmHD). Ongoing engineering and production work is recorded in this repository so every future update can resume from an accurate, reviewable state.
+Created and directed by [QemmHD](https://github.com/QemmHD). Engineering and production progress is kept in this repository so every future update can resume from reviewable code, tests, images, and written state.

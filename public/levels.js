@@ -8,7 +8,7 @@
 
 const STEP = 10;
 
-export const COURSE_VERSION = 'course-2';
+export const COURSE_VERSION = 'course-3';
 
 export class Course {
   constructor(startX, startY) {
@@ -103,6 +103,8 @@ export class Course {
     const id = opts.id || `platform-${this.platforms.length}`;
     this.platforms.push({ id, x: this.x + dx, y: this.y + dy,
       width: opts.width ?? 170, height: opts.height ?? 22,
+      startActive: opts.startActive !== false,
+      triggerX: opts.triggerX ?? (opts.triggerDx == null ? null : this.x + opts.triggerDx),
       surface: opts.surface || 'metal', motion: opts.motion || { kind: 'static' },
       render: { model: opts.model || 'freight', warningStripe: opts.warningStripe !== false } });
     return this;
@@ -341,6 +343,7 @@ function level14() { // Lift Logic: vertical decks create timing and recovery li
   const c = new Course(180, 318);
   c.flat(300).checkpoint().hill(280, 70).flat(120)
     .platform(80, -92, { id: 'lift-logic-a', width: 180,
+      startActive: false, triggerDx: -70, model: 'sensor-lift',
       motion: { kind: 'vertical-sine', amplitude: 70, period: 2.7 } });
   c.dip(360, 96).ice(260).flat(150).checkpoint()
     .platform(130, -126, { id: 'lift-logic-b', width: 150,

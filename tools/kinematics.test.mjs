@@ -3,12 +3,16 @@ import test from 'node:test';
 
 import {
   KINEMATIC_TICK_RATE,
+  activateKinematicPlatform,
   createKinematicRun,
+  deactivateKinematicPlatform,
   getKinematicPlatform,
   platformPoseAt,
   resetKinematicRun,
   resolveCircleOnPlatform,
+  restoreKinematicRun,
   sampleKinematicPlatform,
+  snapshotKinematicRun,
   stepKinematicRun,
 } from '../public/kinematics.js';
 import { buildTerrain, createBike, resolveBikePlatforms, stepBike } from '../public/physics.js';
@@ -101,6 +105,213 @@ test('runtime state never mutates authored definitions and exposes render geomet
   assert.equal(renderState.width, source[0].width);
   assert.equal(renderState.left, renderState.x - renderState.width * 0.5);
   assert.equal(renderState.render.model, 'rail-deck');
+});
+
+test('a dormant platform stays solid at base and activation starts local tick zero', () => {
+  const definition = {
+    id: 'trigger-lift', x: 320, y: 260, width: 180, height: 22,
+    startActive: false, triggerX: 555,
+    motion: { kind: 'horizontal-sine', amplitude: 72, period: 2 },
+  };
+  const authoredBefore = JSON.stringify(definition);
+  const run = createKinematicRun([definition], { startTick: 120 });
+  const platform = run.platforms[0];
+
+  assert.equal(platform.active, false);
+  assert.equal(platform.definition.triggerX, 555);
+  assert.ok(Object.isFrozen(platform.definition));
+  assert.equal(JSON.stringify(definition), authoredBefore);
+  assert.equal(platform.activationTick, null);
+  assert.equal(platform.current.x, definition.x);
+  stepKinematicRun(run, 60);
+  assert.equal(platform.current.x, definition.x);
+  assert.equal(platform.current.vx, 0);
+
+  const circle = { x: definition.x, y: platform.current.top - 12,
+    ox: definition.x, oy: platform.current.top - 12, r: 12 };
+  const dormantContact = resolveCircleOnPlatform(circle, platform);
+  assert.ok(dormantContact, 'inactive platform stopped being solid');
+  assert.equal(dormantContact.active, false);
+
+  assert.equal(activateKinematicPlatform(run, definition.id), true);
+  assert.equal(platform.active, true);
+  assert.equal(platform.activationTick, 180);
+  assert.equal(platform.current.motionTick, 0);
+  assert.equal(platform.current.x, platformPoseAt(definition, 0).x);
+  assert.equal(platform.current.vx, 0, 'activation injected teleport velocity');
+  const renderState = sampleKinematicPlatform(platform, 1);
+  assert.equal(renderState.active, true);
+  assert.equal(renderState.activationTick, 180);
+
+  stepKinematicRun(run, 30);
+  assert.equal(platform.current.motionTick, 30);
+  assert.ok(Math.abs(platform.current.x - platformPoseAt(definition, 30).x) < 1e-9);
+  assert.equal(deactivateKinematicPlatform(run, definition.id), true);
+  assert.equal(platform.active, false);
+  assert.equal(platform.activationTick, null);
+  assert.equal(platform.current.x, definition.x);
+  assert.equal(platform.current.vx, 0);
+});
+
+test('trigger activation and reset replay exactly from a nonzero start tick', () => {
+  const source = [{
+    id: 'replay-trigger', x: 80, y: 200, width: 150, height: 20,
+    startActive: false,
+    motion: { kind: 'lift', distance: 96, period: 1.75, direction: -1 },
+  }];
+  const original = JSON.stringify(source);
+  const run = createKinematicRun(source, { startTick: 73 });
+  const record = () => {
+    stepKinematicRun(run, 11);
+    assert.equal(activateKinematicPlatform(run, 'replay-trigger'), true);
+    const trace = [];
+    for (let tick = 0; tick < 180; tick++) {
+      trace.push({
+        tick: run.tick,
+        active: run.platforms[0].active,
+        activationTick: run.platforms[0].activationTick,
+        motionTick: run.platforms[0].current.motionTick,
+        x: run.platforms[0].current.x,
+        y: run.platforms[0].current.y,
+        vx: run.platforms[0].current.vx,
+        vy: run.platforms[0].current.vy,
+      });
+      stepKinematicRun(run);
+    }
+    return trace;
+  };
+
+  const first = record();
+  resetKinematicRun(run);
+  assert.equal(run.tick, 73);
+  assert.equal(run.platforms[0].active, false);
+  assert.equal(run.platforms[0].activationTick, null);
+  assert.equal(run.platforms[0].current.x, source[0].x);
+  const second = record();
+  assert.deepEqual(second, first);
+  assert.equal(JSON.stringify(source), original, 'trigger runtime mutated authored data');
+  assert.equal(run.definitions[0].startActive, false);
+  assert.equal(run.definitions[0].triggerX, null);
+  assert.ok(Object.isFrozen(run.definitions[0]));
+});
+
+test('trigger APIs return false for missing ids and no-op state changes', () => {
+  const run = createKinematicRun([{
+    id: 'known-trigger', x: 0, y: 100, width: 100, height: 20,
+    startActive: false, motion: { kind: 'piston', stroke: 40, period: 1 },
+  }]);
+  assert.equal(activateKinematicPlatform(run, 'missing'), false);
+  assert.equal(deactivateKinematicPlatform(run, 'missing'), false);
+  assert.equal(deactivateKinematicPlatform(run, 'known-trigger'), false);
+  assert.equal(activateKinematicPlatform(run, 'known-trigger'), true);
+  assert.equal(activateKinematicPlatform(run, 'known-trigger'), false);
+  assert.equal(deactivateKinematicPlatform(run, 'known-trigger'), true);
+  assert.equal(deactivateKinematicPlatform(run, 'known-trigger'), false);
+});
+
+test('a rider remains carried for ten cycles after delayed activation', () => {
+  const definition = {
+    id: 'delayed-shuttle', x: 240, y: 220, width: 220, height: 22,
+    startActive: false,
+    motion: { kind: 'horizontal-sine', amplitude: 64, period: 1.8 },
+  };
+  const run = createKinematicRun([definition], { startTick: 41 });
+  stepKinematicRun(run, 19);
+  assert.equal(activateKinematicPlatform(run, definition.id), true);
+  const platform = run.platforms[0];
+  const radius = 14;
+  const circle = { x: platform.current.x, y: platform.current.top - radius,
+    ox: platform.current.x, oy: platform.current.top - radius, r: radius };
+  const relativeX = circle.x - platform.current.x;
+  const cycleTicks = Math.round(definition.motion.period * KINEMATIC_TICK_RATE);
+
+  for (let tick = 0; tick < cycleTicks * 10; tick++) {
+    stepKinematicRun(run);
+    verletStep(circle);
+    const contact = resolveCircleOnPlatform(circle, platform);
+    assert.ok(contact, `triggered rider lost contact at local tick ${tick}`);
+    assert.equal(contact.active, true);
+    assert.ok(Math.abs((circle.x - platform.current.x) - relativeX) < 1e-7);
+    assert.ok(Math.abs(circle.y - (platform.current.top - radius)) < 1e-8);
+  }
+});
+
+test('checkpoint snapshot restores an activated platform and exact subsequent trace', () => {
+  const source = [{
+    id: 'checkpoint-lift', x: 180, y: 260, width: 190, height: 22,
+    startActive: false, triggerX: 420,
+    motion: { kind: 'lift', distance: 108, period: 2.25, direction: -1 },
+  }];
+  const authoredBefore = JSON.stringify(source);
+  const run = createKinematicRun(source, { startTick: 37 });
+  stepKinematicRun(run, 14);
+  assert.equal(activateKinematicPlatform(run, 'checkpoint-lift'), true);
+  stepKinematicRun(run, 53);
+  const checkpoint = snapshotKinematicRun(run);
+  const checkpointBefore = JSON.stringify(checkpoint);
+
+  assert.equal(Object.getPrototypeOf(checkpoint), Object.prototype);
+  assert.equal(Object.getPrototypeOf(checkpoint.platforms[0]), Object.prototype);
+  assert.equal(checkpoint.tick, 104);
+  assert.equal(checkpoint.platforms[0].activationTick, 51);
+
+  const trace = () => {
+    const output = [];
+    for (let tick = 0; tick < 240; tick++) {
+      stepKinematicRun(run);
+      const platform = run.platforms[0];
+      output.push({
+        tick: run.tick,
+        active: platform.active,
+        activationTick: platform.activationTick,
+        previous: { ...platform.previous },
+        current: { ...platform.current },
+      });
+    }
+    return output;
+  };
+  const expected = trace();
+
+  deactivateKinematicPlatform(run, 'checkpoint-lift');
+  stepKinematicRun(run, 17);
+  resetKinematicRun(run);
+  stepKinematicRun(run, 9);
+  restoreKinematicRun(run, checkpoint);
+  assert.equal(JSON.stringify(checkpoint), checkpointBefore, 'restore mutated its snapshot');
+  assert.equal(JSON.stringify(source), authoredBefore, 'restore mutated authored definitions');
+  assert.deepEqual(snapshotKinematicRun(run), checkpoint);
+  assert.deepEqual(trace(), expected);
+
+  const restoredX = run.platforms[0].current.x;
+  checkpoint.platforms[0].current.x += 10;
+  assert.equal(run.platforms[0].current.x, restoredX, 'run retained snapshot pose objects');
+});
+
+test('checkpoint restore rejects malformed or mismatched snapshots atomically', () => {
+  const run = createKinematicRun([{
+    id: 'snapshot-a', x: 0, y: 100, width: 120, height: 20,
+    startActive: false, motion: { kind: 'sine', axis: 'x', amplitude: 20, period: 1 },
+  }, {
+    id: 'snapshot-b', x: 200, y: 100, width: 120, height: 20,
+  }], { startTick: 9 });
+  stepKinematicRun(run, 5);
+  activateKinematicPlatform(run, 'snapshot-a');
+  stepKinematicRun(run, 8);
+  const good = snapshotKinematicRun(run);
+  const stable = JSON.stringify(good);
+  const attempt = (mutate, pattern) => {
+    const malformed = structuredClone(good);
+    mutate(malformed);
+    assert.throws(() => restoreKinematicRun(run, malformed), pattern);
+    assert.equal(JSON.stringify(snapshotKinematicRun(run)), stable,
+      'failed restore partially changed the run');
+  };
+
+  attempt(snapshot => { snapshot.platforms.pop(); }, /count/);
+  attempt(snapshot => { snapshot.platforms[0].id = 'wrong-id'; }, /id/);
+  attempt(snapshot => { snapshot.platforms[0].current.x = NaN; }, /finite/);
+  attempt(snapshot => { delete snapshot.platforms[0].current.vx; }, /missing/);
+  attempt(snapshot => { snapshot.platforms[0].active = false; }, /activationTick|active state/);
 });
 
 test('an idle circle remains planted on moving ground for ten full cycles', () => {

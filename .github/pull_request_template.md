@@ -14,7 +14,7 @@ Explain the problem, design intention, or roadmap gate this work addresses.
 
 ## Verification
 
-- [ ] npm test
+- [ ] `npm ci --ignore-scripts` and `npm test`
 - [ ] Relevant browser playtest
 - [ ] Desktop layout checked
 - [ ] Mobile/touch layout checked when presentation or input changed
@@ -30,7 +30,9 @@ List exact commands, fixtures, routes, and results here.
 - [ ] public/version.js and package.json agree when the release changed
 - [ ] New runtime files are included in the offline release
 - [ ] New mechanics have deterministic tests or proof tapes
-- [ ] Store screenshots were refreshed when the presentation changed materially
+- [ ] Golden-manifest changes were intentional, inspected, and replay-verified
+- [ ] Store screenshots were refreshed under a versioned `docs/screenshots/` section when presentation changed materially
+- [ ] A screenshot-backed release brief exists for a release-candidate bump
 
 ## Originality
 

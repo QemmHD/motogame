@@ -1,14 +1,14 @@
 // game.js — Moto Rush X3 client. Canvas 2D, fixed-timestep sim, no framework.
 import { STR } from './strings.js';
 import { buildLevels, COURSE_VERSION } from './levels.js';
-import { createBike, stepBike, buildTerrain, bikePoints, normAngle, CONFIG,
-  PHYSICS_VERSION, resolveBikePlatforms, terrainContact } from './physics.js';
-import { createRunState, restoreCheckpointRunState, stepRunRules } from './rules.js';
+import { bikePoints, normAngle, CONFIG, PHYSICS_VERSION, terrainContact } from './physics.js';
 import { createReplayPlayback, createReplayRecorder, decodeReplay, encodeReplay,
   hashReplayState } from './replay.js';
-import { createKinematicRun, resetKinematicRun, sampleKinematicPlatform,
-  stepKinematicRun } from './kinematics.js';
+import { sampleKinematicPlatform } from './kinematics.js';
 import { createRagdoll, readRagdoll, stepRagdoll } from './ragdoll.js';
+import { buildDebugProxySnapshot } from './debug-proxies.js';
+import { initializeRunSession, snapshotRunSession,
+  stepCrashedRun, stepPlayingRun } from './run-session.js';
 
 // ---------------------------------------------------------------- assets ----
 const ASSETS = {
@@ -19,14 +19,41 @@ const ASSETS = {
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
 const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: CONFIG.wheelR, sag: 0.22, dip: 18 };
-const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.4-dev';
+const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.5-dev';
 const BUILD = globalThis.MOTO_RUSH_BUILD?.label || `v${BUILD_VERSION}`;
 const IMG = {};
+const GOLDEN_TAPES = new Map();
+let goldenManifest = null;
 function loadAssets() {
   return Promise.all(Object.entries(ASSETS).map(([k, f]) => new Promise((res) => {
     const im = new Image(); im.onload = () => { IMG[k] = im; res(); };
     im.onerror = () => { console.warn('missing asset', f); res(); }; im.src = './assets/' + f;
   })));
+}
+async function loadGoldenTapes() {
+  try {
+    const response = await fetch('./golden-tapes.json', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const manifest = await response.json();
+    if (manifest?.schema !== 1 || manifest.build !== BUILD_VERSION
+        || manifest.physics !== PHYSICS_VERSION || manifest.course !== COURSE_VERSION
+        || manifest.levelCount !== levels.length || !Array.isArray(manifest.levels)
+        || manifest.levels.length !== levels.length) {
+      throw new Error('reference manifest is incompatible with this build');
+    }
+    for (let index = 0; index < manifest.levels.length; index++) {
+      const entry = manifest.levels[index];
+      if (entry?.index !== index || entry.id !== `level-${index + 1}` || typeof entry.token !== 'string') {
+        throw new Error(`reference catalog entry ${index} is malformed`);
+      }
+      const decoded = decodeReplay(entry.token, { expected: replayMetadata(index) });
+      if (!decoded.ok) throw new Error(`reference ${entry.id} failed ${decoded.code}`);
+      GOLDEN_TAPES.set(entry.index, Object.freeze({ ...entry }));
+    }
+    goldenManifest = Object.freeze(manifest);
+  } catch (error) {
+    console.warn('golden reference runs unavailable', error);
+  }
 }
 
 // ---- tunables (bike sprite placement over physics axle line) ----
@@ -164,6 +191,8 @@ addEventListener('keydown', e => {
   if (KEYMAP[e.code]) { held.add(KEYMAP[e.code]); e.preventDefault(); }
   if (e.code === 'KeyR') restartLevel();
   if (e.code === 'KeyM') Audio2.toggle();
+  if (e.code === 'KeyC' && dev) collisionDebug = !collisionDebug;
+  if (e.code === 'KeyG' && G.state === 'finished') doUI('golden');
   if (e.code === 'Escape' || e.code === 'KeyP') { if (G.settingsOpen) G.settingsOpen = false; else togglePause(); }
   if (e.code === 'Space' || e.code === 'Enter') { primaryAction(); e.preventDefault(); }
   Audio2.resume();
@@ -223,7 +252,12 @@ function currentInput() {
       for (const k in R) { const b = R[k]; if (Math.hypot(x - b.x, y - b.y) <= b.r * 1.15) cmd[k] = true; }
   }
   if (devAutoplay && G.state === 'playing') {
-    cmd.gas = true;
+    cmd.gas = G.devWaitTicks <= 0;
+    cmd.brake = G.devWaitTicks > 0;
+    const threat = G.run?.hazards.find(h => !h.exploded && h.type !== 'tnt'
+      && h.x > G.bike.x + 30 && h.x < G.bike.x + 155
+      && Math.abs(h.y - G.bike.y) < h.r + 82);
+    if (threat && G.bike?.grounded) { cmd.gas = false; cmd.brake = true; }
     if (!G.bike?.grounded) {
       const angle = normAngle(G.bike?.angle || 0);
       if (angle > 0.25) cmd.leanBack = true;
@@ -251,8 +285,12 @@ const G = {
   engineGear: 1,
   ragdoll: null, ragdollPose: null,
   replayMode: false, replayPlayback: null, replayRecorder: null, replayToken: null,
+  replaySource: null,
   replayTick: 0, replayVerified: false, replayRecorded: false, replayFailed: null,
   restartQueued: false, replayUnavailable: null,
+  replayNotice: null,
+  devWaitTicks: 0, devCrashCount: 0,
+  debugProxy: null,
 };
 
 function replayMetadata(i) {
@@ -260,47 +298,53 @@ function replayMetadata(i) {
     physicsVersion: PHYSICS_VERSION, generatorVersion: COURSE_VERSION };
 }
 
-function startLevel(i, { replayToken = null } = {}) {
+function startLevel(i, { replayToken = null, replaySource = null } = {}) {
   const L = levels[i]; G.levelIdx = i; G.level = L;
   let playback = null;
   if (replayToken) {
     const decoded = decodeReplay(replayToken, { expected: replayMetadata(i) });
     if (decoded.ok) playback = createReplayPlayback(decoded.replay);
-    else { delete save.replays[i]; persist(); replayToken = null; }
+    else {
+      if (replaySource !== 'golden' && save.replays[i] === replayToken) {
+        delete save.replays[i]; persist();
+      }
+      if (G.replayToken === replayToken) G.replayToken = null;
+      const message = decoded.code === 'INCOMPATIBLE_VERSION' ? STR.proofExpired
+        : decoded.code === 'TOO_LARGE' ? STR.proofTooLarge : STR.proofDamaged;
+      G.replayNotice = { message, detail: decoded.message || decoded.code, life: 4.5 };
+      return false;
+    }
   }
-  G.terrain = buildTerrain(L.course.chains);
-  G.run = createRunState(L); G.cpList = G.run.cpList; G.cpIndex = 0;
-  G.kinematics = createKinematicRun(L.course.platforms || []);
-  G.bike = createBike(L.course.startX, L.course.startY - 40);
-  G.elapsed = 0; G.flipBonus = 0; G.running = true; G.state = 'playing';
-  G.particles.length = 0; G.popups.length = 0; G.shake = 0; G.crashTimer = 0; G.crashAge = 0;
+  G.replayNotice = null;
+  initializeRunSession(G, L, i);
+  G.particles.length = 0; G.popups.length = 0; G.shake = 0; G.cpFlash = 0;
   G.ragdoll = null; G.ragdollPose = null;
-  G.prevGrounded = true; G.prevFlipEvent = G.bike.flipEventId;
   G.slow = 1; G.hitstop = 0; G.flash = 0;
-  G.score = 0; G.combo = 1; G.comboTimer = 0; G.airStart = -1;
   G.tracks.length = 0; G.trackT = 0;
+  G.riderLean = 0; G.leanCmd = 0; G.engineGear = 1; G.debugProxy = null;
   G.replayMode = !!playback; G.replayPlayback = playback; G.replayToken = replayToken;
+  G.replaySource = playback ? (replaySource || 'saved') : null;
   G.replayRecorder = playback ? null : createReplayRecorder(replayMetadata(i));
   G.replayTick = 0; G.replayVerified = false; G.replayRecorded = false; G.replayFailed = null;
   G.restartQueued = false; G.replayUnavailable = null;
+  G.devWaitTicks = 0; G.devCrashCount = 0;
   G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
   Audio2.setMusicState('drive');
+  return true;
 }
 function restartLevel() {
-  if (G.level) startLevel(G.levelIdx, G.replayMode ? { replayToken: G.replayToken } : undefined);
+  if (G.level) startLevel(G.levelIdx, G.replayMode
+    ? { replayToken: G.replayToken, replaySource: G.replaySource } : undefined);
 }
-function respawn() {
-  G.cpIndex = G.run?.cpIndex ?? G.cpIndex;
-  const cp = G.cpList[G.cpIndex];
-  const keepSpin = G.bike.wheelSpin;
-  G.run = restoreCheckpointRunState(G.level, G.run); G.cpList = G.run.cpList;
-  resetKinematicRun(G.kinematics, G.run.tick);
-  G.bike = createBike(cp.x, cp.y - 40); G.bike.wheelSpin = keepSpin;
+function finishRespawnPresentation() {
   G.ragdoll = null; G.ragdollPose = null;
-  G.state = 'playing'; G.airStart = -1; G.crashTimer = 0; G.crashAge = 0;
   G.particles.length = 0; G.popups.length = 0; G.shake = 0; G.hitstop = 0; G.flash = 0; G.slow = 1;
   G.cam.kickX = 0; G.cam.kickY = 0; G.restartQueued = false;
-  G.prevGrounded = true; G.prevFlipEvent = G.bike.flipEventId;
+  if (devAutoplay) {
+    G.devCrashCount++;
+    G.devWaitTicks = 12 + (G.devCrashCount % 7) * 11;
+  }
+  G.riderLean = 0; G.leanCmd = 0;
   Audio2.setMusicState('drive');
 }
 function togglePause() {
@@ -323,20 +367,7 @@ function replayInputAtTick() {
 }
 
 function replayStateSnapshot() {
-  const q = value => Math.round((Number(value) || 0) * 1000);
-  const node = n => [q(n.x), q(n.y), q(n.ox), q(n.oy)];
-  return {
-    level: G.levelIdx, replayTick: G.replayTick, runTick: G.run.tick,
-    checkpoint: G.run.cpIndex, elapsed: q(G.elapsed), score: G.score,
-    flipBonus: q(G.flipBonus), bike: {
-      mode: G.bike.mode, rear: node(G.bike.rear), front: node(G.bike.front), head: node(G.bike.head),
-      air: [q(G.bike.mx), q(G.bike.my), q(G.bike.mvx), q(G.bike.mvy), q(G.bike.aAngle), q(G.bike.aOmega)],
-      flips: G.bike.flipEventId,
-    },
-    hazards: G.run.hazards.map(h => [h.id, q(h.x), q(h.y), h.triggered ? 1 : 0,
-      h.fuseTicks, h.exploded ? 1 : 0]),
-    platforms: G.kinematics.platforms.map(p => [p.id, q(p.current.x), q(p.current.y)]),
-  };
+  return { ...snapshotRunSession(G), replayTick: G.replayTick };
 }
 
 function failReplay(reason) {
@@ -347,19 +378,25 @@ function failReplay(reason) {
   Audio2.stopEngine(); Audio2.setMusicState('menu');
 }
 
-// combo/style scoring
-function scoreEvent(label, color, base, x, y) {
-  G.combo = Math.min(9, G.combo + 1); G.comboTimer = 2.6;
-  G.score += Math.round(base * G.combo);
-  addPopup(label + (G.combo > 1 ? '  x' + G.combo : ''), x, y, color);
+// ---------------------------------------------------------------- sim -------
+function presentSessionScore(event) {
+  if (event.type === 'flip') return;
+  const presentation = {
+    bigAir: [STR.bigAir, '#ffd23e'],
+    landingPerfect: [STR.landingPerfect, '#8bff6b'],
+    landingClean: [STR.landingClean, '#8fe3ff'],
+    blastLine: ['BLAST LINE', '#ffb12b'],
+    nearMiss: [STR.nearMiss, '#8fe3ff'],
+  }[event.type];
+  if (!presentation) return;
+  const combo = event.combo > 1 ? '  x' + event.combo : '';
+  addPopup(presentation[0] + combo, event.x, event.y, presentation[1]);
 }
 
-// ---------------------------------------------------------------- sim -------
 function simulate(dt) {
   if (G.replayMode && G.replayTick >= G.replayPlayback.finishTick) {
     failReplay('tape ended before the finish'); return;
   }
-  const bike = G.bike, L = G.level;
   const neutral = { gas: false, brake: false, leanBack: false, leanFwd: false };
   const tapeInput = G.replayMode ? replayInputAtTick() : null;
   const input = G.state === 'playing' && !G.settingsOpen
@@ -375,76 +412,59 @@ function simulate(dt) {
     }
   }
   G.replayTick++;
-  if (G.state === 'crashed' && restart) { respawn(); return; }
+  if (devAutoplay && G.devWaitTicks > 0 && G.state === 'playing') G.devWaitTicks--;
   // rider body English: lean the character with the control input (smoothed)
   G.leanCmd = (input.leanFwd ? 1 : 0) - (input.leanBack ? 1 : 0);
   G.riderLean += (G.leanCmd - G.riderLean) * Math.min(1, dt * 9);
   if (G.state === 'playing') {
-    G.elapsed += dt;
-    stepKinematicRun(G.kinematics);
-    stepBike(bike, G.terrain, input, dt);
-    resolveBikePlatforms(bike, G.kinematics, dt, input);
+    const events = stepPlayingRun(G, input, dt);
+    const bike = G.bike;
     G.engineGear = Audio2.setEngine(bike.speed, input.gas, bike.grounded, bike.forwardSpeed) || G.engineGear;
-    if (G.comboTimer > 0) { G.comboTimer -= dt; if (G.comboTimer <= 0) G.combo = 1; }
-
-    // flips -> time bonus + score + combo
-    if (bike.flipEventId > G.prevFlipEvent) {
-      G.prevFlipEvent = bike.flipEventId;
-      const n = Math.abs(bike.lastFlips);
-      G.flipBonus += 0.5 * n;
-      G.combo = Math.min(9, G.combo + n); G.comboTimer = 2.6;
-      G.score += Math.round(150 * n * G.combo);
+    for (const flip of events.flips) {
+      const n = flip.count;
       const label = n >= 3 ? STR.flip3 : n >= 2 ? STR.flip2 : STR.flip;
-      addPopup(label + '  -' + (0.5 * n).toFixed(1) + 's' + (G.combo > 1 ? '  x' + G.combo : ''), bike.x, bike.y - 70, '#ffd23e');
+      addPopup(label + '  -' + flip.timeBonus.toFixed(1) + 's'
+        + (flip.combo > 1 ? '  x' + flip.combo : ''), flip.x, flip.y, '#ffd23e');
       Audio2.flip(); vib(14);
       if (n >= 2 && !reduced()) G.slow = 0.5;   // brief slow-mo on multi-flip
     }
-    // air tracking + landing feedback
-    if (!bike.grounded && G.prevGrounded) G.airStart = G.elapsed;
-    if (bike.landedThisStep && !bike.crashed) {
-      const v = bike.landingImpact;
-      const air = G.airStart >= 0 ? G.elapsed - G.airStart : 0;
-      const gradeWorthy = air > 0.22 || v > 220;
-      if (v > 120) { shakeAdd(Math.min(14, v / 90)); Audio2.land(v); dustBurst(bike.rear.x, bike.rear.y, 8); vib(18);
+    for (const landing of events.landings) {
+      const v = landing.impact;
+      if (landing.feedback) { shakeAdd(Math.min(14, v / 90)); Audio2.land(v); dustBurst(bike.rear.x, bike.rear.y, 8); vib(18);
         camKick(0, Math.min(10, v / 90)); if (v > 300) dirtClods(bike.rear.x, bike.rear.y, Math.min(10, v / 120)); }
       if (v > 520 && !reduced()) { G.hitstop = 0.04; G.flash = Math.min(0.4, v / 1600); }
-      if (air > 0.62) { scoreEvent(STR.bigAir, '#ffd23e', Math.round(air * 150), bike.x, bike.y - 60); Audio2.stunt(); }
-      if (gradeWorthy && bike.landingGrade === 'perfect') scoreEvent(STR.landingPerfect, '#8bff6b', 180, bike.x, bike.y - 86);
-      else if (gradeWorthy && bike.landingGrade === 'clean') scoreEvent(STR.landingClean, '#8fe3ff', 90, bike.x, bike.y - 76);
-      else if (gradeWorthy && bike.landingGrade === 'rough') addPopup(STR.landingRough, bike.x, bike.y - 68, '#ffbd62');
-      else if (gradeWorthy && bike.landingGrade === 'slam') addPopup(STR.landingSlam, bike.x, bike.y - 68, '#ff6a4a');
-      G.airStart = -1;
+      if (landing.airTime > 0.62) Audio2.stunt();
+      if (landing.gradeWorthy && landing.grade === 'rough') addPopup(STR.landingRough, landing.x, landing.y - 68, '#ffbd62');
+      else if (landing.gradeWorthy && landing.grade === 'slam') addPopup(STR.landingSlam, landing.x, landing.y - 68, '#ff6a4a');
     }
-    G.prevGrounded = bike.grounded;
-    if (bike.grounded && input.gas && bike.speed > 120 && Math.random() < 0.6) dust(bike.rear.x, bike.rear.y, bike.speed);
-    if (bike.grounded && input.gas && Math.random() < 0.25) exhaust(bike);
+    for (const score of events.scores) presentSessionScore(score);
+    if (events.stateAfter === 'playing' && bike.grounded && input.gas && bike.speed > 120 && Math.random() < 0.6) dust(bike.rear.x, bike.rear.y, bike.speed);
+    if (events.stateAfter === 'playing' && bike.grounded && input.gas && Math.random() < 0.25) exhaust(bike);
     // tire tracks (decal ring buffer)
-    if (bike.grounded && bike.speed > 60) { G.trackT += dt; if (G.trackT > 0.03) { G.trackT = 0;
+    if (events.stateAfter === 'playing' && bike.grounded && bike.speed > 60) { G.trackT += dt; if (G.trackT > 0.03) { G.trackT = 0;
       const p = bikePoints(bike); G.tracks.push({ x: p.rear.x, y: p.rear.y + CONFIG.wheelR * 0.7, a: 0.5 });
       if (G.tracks.length > 220) G.tracks.shift(); } }
-
-    const events = stepRunRules(L, G.run, bike);
     for (const blast of events.explosions) explosion(blast.x, blast.y);
     for (const impulse of events.impulses) {
       addPopup('BLAST BOOST!', impulse.x, impulse.y - 56, '#ffb12b');
-      scoreEvent('BLAST LINE', '#ffb12b', Math.round(impulse.power * 0.3), impulse.x, impulse.y - 88);
       shakeAdd(12); camKick(-6, -8); vib(24);
     }
-    for (const miss of events.nearMisses) {
-      scoreEvent(STR.nearMiss, '#8fe3ff', 70, miss.x, miss.y - 40); Audio2.stunt();
+    for (const _miss of events.nearMisses) Audio2.stunt();
+    for (const activation of events.platformActivations) {
+      const platform = G.kinematics.platforms.find(item => item.id === activation.id);
+      addPopup(STR.liftOnline, platform?.current.x ?? activation.triggerX,
+        (platform?.current.y ?? bike.y) - 58, '#55d8ff');
+      Audio2.checkpoint(); camKick(0, -5); vib(18);
     }
-    if (events.crash) bike.crashed = true;
     if (events.checkpoint) {
-      G.cpIndex = G.run.cpIndex; const cp = events.checkpoint;
       G.cpFlash = 1.2; Audio2.checkpoint(); addPopup(STR.checkpoint, bike.x, bike.y - 80, '#8fe3ff');
     }
-    if (events.finished && !bike.crashed) return finishLevel();
-    if (bike.crashed) return doCrash(events.crash);
-    if (bike.y > L.course.bounds().maxY + 900) { bike.crashed = true; return doCrash({ type: 'fallout' }); }
+    if (events.finish) return finishLevel();
+    if (events.crash) return doCrash(events.crash.reason || events.crash);
   } else if (G.state === 'crashed') {
-    G.elapsed += dt;
+    const events = stepCrashedRun(G, { restart }, dt);
+    if (events.respawn) { finishRespawnPresentation(); return; }
     if (G.ragdoll) { stepRagdoll(G.ragdoll, dt); G.ragdollPose = readRagdoll(G.ragdoll, G.ragdollPose || {}); }
-    G.crashAge += dt; G.crashTimer -= dt; if (G.crashTimer <= 0) respawn();
   }
 }
 
@@ -460,8 +480,10 @@ function crashContact(x, y, radius) {
 }
 
 function doCrash(reason = null) {
-  if (G.state !== 'playing') return;
-  G.state = 'crashed'; G.crashTimer = 1.85; G.crashAge = 0; G.combo = 1; G.comboTimer = 0;
+  if (G.state !== 'playing' && G.state !== 'crashed') return;
+  if (G.state === 'playing') {
+    G.state = 'crashed'; G.crashTimer = 1.85; G.crashAge = 0; G.combo = 1; G.comboTimer = 0;
+  }
   const sourceX = reason?.x ?? G.bike.head.x, sourceY = reason?.y ?? G.bike.head.y;
   const dx = G.bike.x - sourceX, dy = G.bike.y - sourceY, d = Math.max(1, Math.hypot(dx, dy));
   G.ragdoll = createRagdoll(G.bike, { sampleDt: G.bike._dt, contact: crashContact,
@@ -765,10 +787,26 @@ function drawPlatforms() {
     const p = sampleKinematicPlatform(platform, 1);
     const base = platform.definition;
     ctx.save();
+    if (Number.isFinite(base.triggerX)) {
+      const groundY = groundYAt(base.triggerX);
+      if (groundY != null) {
+        const armed = !p.active;
+        ctx.strokeStyle = armed ? '#55d8ff' : '#8bff6b'; ctx.lineWidth = 3;
+        ctx.setLineDash([7, 7]); ctx.beginPath();
+        ctx.moveTo(base.triggerX, groundY - 5); ctx.lineTo(base.x, base.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = armed ? '#173d51' : '#17462c'; ctx.strokeStyle = armed ? '#55d8ff' : '#8bff6b';
+        ctx.lineWidth = 3; roundRect(base.triggerX - 36, groundY - 9, 72, 13, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = armed ? '#bcefff' : '#c9ffd0'; ctx.font = '900 11px ui-monospace, monospace';
+        ctx.textAlign = 'center'; ctx.fillText(armed ? 'LIFT SENSOR' : 'LIFT LIVE', base.triggerX, groundY - 18);
+        ctx.textAlign = 'left';
+      }
+    }
     ctx.strokeStyle = 'rgba(180,210,230,0.24)'; ctx.lineWidth = 3;
     ctx.setLineDash([10, 9]); ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(p.x, p.y); ctx.stroke();
     ctx.setLineDash([]);
     ctx.translate(p.x, p.y);
+    ctx.globalAlpha = p.active ? 1 : 0.74;
     ctx.fillStyle = '#222b35'; ctx.strokeStyle = '#0e141b'; ctx.lineWidth = 4;
     roundRect(-p.width / 2, -p.height / 2, p.width, p.height, 5); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#3d4b59'; ctx.fillRect(-p.width / 2 + 5, -p.height / 2 + 4, p.width - 10, 5);
@@ -784,8 +822,60 @@ function drawPlatforms() {
     for (let x = -p.width / 2 + 13; x < p.width / 2; x += 28) {
       ctx.beginPath(); ctx.arc(x, 0, 2.2, 0, Math.PI * 2); ctx.fill();
     }
+    if (!p.active) {
+      ctx.globalAlpha = 1; ctx.fillStyle = '#55d8ff'; ctx.font = '900 12px ui-monospace, monospace';
+      ctx.textAlign = 'center'; ctx.fillText('STANDBY', 0, -p.height / 2 - 10); ctx.textAlign = 'left';
+    }
     ctx.restore();
   }
+}
+
+function drawCollisionDebug() {
+  const p = buildDebugProxySnapshot({
+    terrain: G.terrain, run: G.run, kinematicRun: G.kinematics, bike: G.bike, level: G.level,
+  });
+  G.debugProxy = p;
+  const circle = (item, color, width = 2) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+    ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2); ctx.stroke();
+  };
+  ctx.save(); ctx.globalAlpha = 0.92; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const segment of p.terrain) {
+    ctx.strokeStyle = segment.enabled ? (segment.surface === 'ice' ? '#62ddff'
+      : segment.surface === 'boost' ? '#ffdd57' : segment.surface === 'bouncy' ? '#ff74d0' : '#53ff91') : '#ff4f5e';
+    ctx.lineWidth = segment.enabled ? 3 : 2; ctx.setLineDash(segment.enabled ? [] : [8, 7]);
+    ctx.beginPath(); ctx.moveTo(segment.a.x, segment.a.y); ctx.lineTo(segment.b.x, segment.b.y); ctx.stroke();
+  }
+  ctx.setLineDash([8, 6]);
+  for (const sweep of p.bike.sweeps) {
+    ctx.strokeStyle = sweep.kind === 'head' ? '#ff4f8b' : '#5be7ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sweep.x0, sweep.y0); ctx.lineTo(sweep.x1, sweep.y1); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const item of p.bike.circles) circle(item.current, item.kind === 'head' ? '#ff4f8b' : '#5be7ff', 3);
+  for (const hazard of p.hazards) {
+    ctx.strokeStyle = hazard.active ? '#ff9f43' : '#79818b'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(hazard.sweep.x0, hazard.sweep.y0); ctx.lineTo(hazard.sweep.x1, hazard.sweep.y1); ctx.stroke();
+    ctx.setLineDash([]); circle(hazard.current, hazard.active ? '#ff5b3d' : '#79818b', 3);
+  }
+  for (const platform of p.platforms) {
+    const prev = platform.previous, cur = platform.current;
+    ctx.strokeStyle = '#8392a5'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.strokeRect(prev.left, prev.top, prev.width, prev.height); ctx.setLineDash([]);
+    ctx.strokeStyle = platform.active ? '#b46cff' : '#55d8ff'; ctx.lineWidth = 3;
+    ctx.strokeRect(cur.left, cur.top, cur.width, cur.height);
+    ctx.beginPath(); ctx.moveTo(platform.sweep.x0, platform.sweep.y0); ctx.lineTo(platform.sweep.x1, platform.sweep.y1); ctx.stroke();
+  }
+  for (const checkpoint of p.checkpoints) {
+    ctx.strokeStyle = checkpoint.reached ? '#7d8794' : checkpoint.next ? '#55d8ff' : '#42637b';
+    ctx.lineWidth = checkpoint.next ? 3 : 2; ctx.setLineDash([9, 7]);
+    ctx.beginPath(); ctx.moveTo(checkpoint.line.x1, checkpoint.line.y1); ctx.lineTo(checkpoint.line.x2, checkpoint.line.y2); ctx.stroke();
+  }
+  if (p.finish) {
+    ctx.strokeStyle = '#ffe052'; ctx.lineWidth = 3; ctx.setLineDash([10, 6]);
+    ctx.beginPath(); ctx.moveTo(p.finish.line.x1, p.finish.line.y1); ctx.lineTo(p.finish.line.x2, p.finish.line.y2); ctx.stroke();
+  }
+  ctx.restore(); ctx.setLineDash([]);
 }
 
 function groundYAt(x) {
@@ -935,6 +1025,7 @@ function drawWorld(scale) {
   drawHazards();
   drawParticles();
   if (G.state === 'crashed' && G.ragdollPose) drawCrashRagdoll(); else drawBike();
+  if (collisionDebug) drawCollisionDebug();
   for (const p of G.popups) {
     ctx.globalAlpha = Math.min(1, p.life / 0.6); ctx.fillStyle = p.color;
     ctx.font = '700 26px system-ui'; ctx.textAlign = 'center';
@@ -986,10 +1077,10 @@ function drawHUD() {
     ctx.fillStyle = '#ffd23e'; ctx.font = '800 12px ui-monospace, monospace'; ctx.textAlign = 'center';
     ctx.fillText('GEAR ' + G.engineGear, cssW - pad - 49, pad + 64); ctx.textAlign = 'left';
     if (G.replayMode) {
-      const rw = 92, rx = (cssW - rw) / 2;
+      const rw = G.replaySource === 'golden' ? 118 : 92, rx = (cssW - rw) / 2;
       roundRect(rx, pad, rw, 30, 9); ctx.fillStyle = 'rgba(60,107,255,0.88)'; ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = '800 12px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText('▶ ' + STR.replay, cssW / 2, pad + 20); ctx.textAlign = 'left';
+      ctx.fillText('▶ ' + (G.replaySource === 'golden' ? STR.goldRun : STR.replay), cssW / 2, pad + 20); ctx.textAlign = 'left';
     }
     if (G.cpFlash > 0) { ctx.globalAlpha = Math.min(1, G.cpFlash); ctx.fillStyle = '#8fe3ff'; ctx.font = '800 34px system-ui'; ctx.textAlign = 'center'; ctx.fillText(STR.checkpoint, cssW / 2, 70); ctx.globalAlpha = 1; ctx.textAlign = 'left'; }
     if (isTouch && G.state === 'playing' && !G.settingsOpen) drawTouchControls();
@@ -999,6 +1090,39 @@ function drawHUD() {
   if (G.state === 'finished') overlayFinished();
   if (G.state === 'menu') drawMenu();
   if (G.settingsOpen) { uiButtons = []; drawSettings(); }
+  if (G.replayNotice) drawReplayNotice();
+  if (collisionDebug && G.debugProxy && G.level) drawCollisionLegend();
+}
+
+function drawCollisionLegend() {
+  const p = G.debugProxy, x = 14, y = 116, w = Math.min(260, cssW - 28), h = 112;
+  ctx.save();
+  roundRect(x, y, w, h, 12); ctx.fillStyle = 'rgba(7,13,20,0.90)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(85,216,255,0.65)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#55d8ff'; ctx.font = '900 13px ui-monospace, monospace';
+  ctx.fillText('COLLISION PROXIES  [C]', x + 12, y + 21);
+  ctx.fillStyle = '#d9e7ef'; ctx.font = '700 11px ui-monospace, monospace';
+  ctx.fillText(`TICK ${String(p.tick).padStart(5, '0')}  TERRAIN ${p.terrain.length}`, x + 12, y + 42);
+  ctx.fillText(`BIKE 3  HAZARDS ${p.hazards.length}  DECKS ${p.platforms.length}`, x + 12, y + 59);
+  ctx.fillStyle = '#53ff91'; ctx.fillText('━ TERRAIN', x + 12, y + 80);
+  ctx.fillStyle = '#5be7ff'; ctx.fillText('○ BIKE', x + 97, y + 80);
+  ctx.fillStyle = '#ff5b3d'; ctx.fillText('○ HAZARD', x + 163, y + 80);
+  ctx.fillStyle = '#b46cff'; ctx.fillText('□ PLATFORM', x + 12, y + 99);
+  ctx.fillStyle = '#ffe052'; ctx.fillText('┊ TRIGGERS', x + 119, y + 99);
+  ctx.restore();
+}
+
+function drawReplayNotice() {
+  const w = Math.min(500, cssW - 24), h = 62, x = (cssW - w) / 2, y = 16;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, G.replayNotice.life * 2);
+  roundRect(x, y, w, h, 14); ctx.fillStyle = 'rgba(78,19,26,0.96)'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,106,74,0.85)'; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ff8b72'; ctx.font = '900 16px system-ui';
+  ctx.fillText(G.replayNotice.message, cssW / 2, y + 25);
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '600 11px system-ui';
+  ctx.fillText(String(G.replayNotice.detail || '').slice(0, 72), cssW / 2, y + 45);
+  ctx.restore(); ctx.textAlign = 'left';
 }
 
 function drawTouchControls() {
@@ -1044,7 +1168,8 @@ function overlayCrashed() {
 }
 function overlayFinished() {
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, cssW, cssH);
-  const w = Math.min(440, cssW - 24), h = Math.min(410, cssH - 24), { x, y } = panel(w, h);
+  const hasGolden = GOLDEN_TAPES.has(G.levelIdx);
+  const w = Math.min(440, cssW - 24), h = Math.min(hasGolden ? 454 : 410, cssH - 24), { x, y } = panel(w, h);
   ctx.textAlign = 'center'; ctx.fillStyle = '#ffd23e'; ctx.font = '800 30px system-ui';
   ctx.fillText(G.replayFailed ? STR.proofFailed : STR.levelComplete, cssW / 2, y + 48);
   for (let i = 0; i < 3; i++) star(cssW / 2 + (i - 1) * 68, y + 104, 30, i < G.finishStars);
@@ -1055,13 +1180,16 @@ function overlayFinished() {
   if (G.finishNewRecord) { ctx.fillStyle = '#8bff6b'; ctx.font = '800 16px system-ui'; ctx.fillText('★ ' + STR.newRecord, cssW / 2, ry); ry += 20; }
   else if (G.finishRecordScore) { ctx.fillStyle = '#8bff6b'; ctx.font = '800 15px system-ui'; ctx.fillText('★ ' + STR.bestScore + ' ' + STR.score, cssW / 2, ry); ry += 20; }
   if (G.replayMode) {
-    ctx.fillStyle = G.replayVerified ? '#8bff6b' : '#ff6a4a'; ctx.font = '800 14px ui-monospace, monospace';
-    ctx.fillText(G.replayVerified ? '✓ ' + STR.proofVerified : '⚠ ' + STR.proofFailed, cssW / 2, ry + 4);
+    const golden = G.replaySource === 'golden';
+    ctx.fillStyle = G.replayVerified ? (golden ? '#ffd23e' : '#8bff6b') : '#ff6a4a'; ctx.font = '800 14px ui-monospace, monospace';
+    ctx.fillText(G.replayVerified ? '✓ ' + (golden ? STR.referenceVerified : STR.proofVerified)
+      : '⚠ ' + STR.proofFailed, cssW / 2, ry + 4);
   } else if (G.replayRecorded) {
     ctx.fillStyle = '#8fe3ff'; ctx.font = '800 14px ui-monospace, monospace';
     ctx.fillText('◆ ' + STR.proofRecorded, cssW / 2, ry + 4);
   }
   ctx.textAlign = 'left';
+  if (hasGolden) btn(cssW / 2 - 67, y + h - 105, 134, 34, STR.goldRun, 'golden', '#bb8612');
   const gap = 10, bw = (w - 60 - gap * 2) / 3;
   btn(x + 20, y + h - 58, bw, 42, STR.retry, 'retry', '#3c6bff');
   btn(x + 20 + bw + gap, y + h - 58, bw, 42, STR.replay, 'replay', '#6f43d6');
@@ -1107,6 +1235,10 @@ function drawMenu() {
       const st = save.stars[i] || 0; for (let s = 0; s < 3; s++) star(x + cardW / 2 + (s - 1) * 22, y + cardH - 40, 9, s < st);
       const bt = save.best[i]; ctx.font = '600 11px ui-monospace, monospace'; ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.fillText(STR.best + ' ' + (bt != null ? fmt(bt) : STR.noTime), x + cardW / 2, y + cardH - 12);
+      if (GOLDEN_TAPES.has(i)) {
+        ctx.fillStyle = '#ffd23e'; roundRect(x + 7, y + 8, 48, 18, 6); ctx.fill();
+        ctx.fillStyle = '#2c2107'; ctx.font = '900 10px ui-monospace, monospace'; ctx.fillText('GOLD ✓', x + 31, y + 21);
+      }
       if (save.replays[i]) { ctx.fillStyle = '#d6c8ff'; ctx.font = '800 12px system-ui'; ctx.fillText('↻', x + cardW - 16, y + 20); }
       uiButtons.push({ x, y, w: cardW, h: cardH, id: 'lvl' + i });
     }
@@ -1159,7 +1291,15 @@ function doUI(id) {
   if (id === 'retry') { G.settingsOpen = false; restartLevel(); return; }
   if (id === 'replay') {
     const token = G.replayToken || save.replays[G.levelIdx];
-    if (token) startLevel(G.levelIdx, { replayToken: token });
+    if (token) startLevel(G.levelIdx, { replayToken: token,
+      replaySource: token === G.replayToken ? G.replaySource : 'saved' });
+    else G.replayNotice = { message: STR.proofMissing, detail: STR.proofMissing, life: 3.5 };
+    return;
+  }
+  if (id === 'golden') {
+    const reference = GOLDEN_TAPES.get(G.levelIdx);
+    if (reference) startLevel(G.levelIdx, { replayToken: reference.token, replaySource: 'golden' });
+    else G.replayNotice = { message: STR.referenceMissing, detail: STR.referenceMissing, life: 3.5 };
     return;
   }
   if (id === 'menu') { G.settingsOpen = false; G.state = 'menu'; G.running = false;
@@ -1185,6 +1325,7 @@ const STEP = 1 / 60; let acc = 0, last = performance.now();
 const devParams = new URLSearchParams(location.search), dev = devParams.has('dev');
 const captureMode = dev && devParams.has('capture');
 const devAutoplay = dev && devParams.has('autoplay');
+let collisionDebug = dev && (devParams.get('debug') === 'collisions' || devParams.has('collisions'));
 if (dev && devParams.has('touch')) isTouch = true;
 const devLevel = Math.max(0, Math.min(levels.length - 1, (parseInt(devParams.get('level'), 10) || 1) - 1));
 if (dev && !captureMode) document.getElementById('dev').style.display = 'block';
@@ -1208,6 +1349,10 @@ function frame(now) {
     acc -= STEP * 1000;
   }
   if (G.flash > 0) G.flash = Math.max(0, G.flash - dtMs / 1000 * 3.5);
+  if (G.replayNotice) {
+    G.replayNotice.life -= dtMs / 1000;
+    if (G.replayNotice.life <= 0) G.replayNotice = null;
+  }
   render();
   if (dev) { frames++; if (now - fpsAt >= 500) { fps = Math.round(frames * 1000 / (now - fpsAt)); frames = 0; fpsAt = now;
     document.getElementById('dev').textContent = fps + ' fps · ' + G.particles.length + ' p · ' + G.state + ' · ' + G.score; } }
@@ -1234,7 +1379,7 @@ function render() {
 
 // ---------------------------------------------------------------- boot ------
 Audio2.loadMusic();
-loadAssets().then(() => {
+Promise.all([loadAssets(), loadGoldenTapes()]).then(() => {
   makePatterns();
   if (patDirt) patScale(patDirt, IMG.dirt);
   if (patRock) patScale(patRock, IMG.rock);
@@ -1244,5 +1389,24 @@ loadAssets().then(() => {
   requestAnimationFrame(frame);
 });
 
+function stepDevTicks(count = 1) {
+  if (!dev) return { ok: false, reason: 'development mode required' };
+  const ticks = Math.max(0, Math.min(20000, Math.trunc(Number(count) || 0)));
+  let stepped = 0;
+  for (; stepped < ticks; stepped++) {
+    if (G.state !== 'playing' && G.state !== 'crashed') break;
+    simulate(STEP); updateParticles(STEP);
+  }
+  return { ok: true, stepped, state: G.state, replayTick: G.replayTick,
+    runTick: G.run?.tick ?? 0, time: G.elapsed, score: G.score,
+    token: G.replayToken || null };
+}
+
+function runDevToEnd(maxTicks = 60 * 120) {
+  return stepDevTicks(maxTicks);
+}
+
 // test hook (used by the screenshot harness / dev console)
-window.__moto = { G, startLevel, restartLevel, levels, SETTINGS };
+window.__moto = { G, startLevel, restartLevel, levels, SETTINGS,
+  stepTicks: stepDevTicks, runToEnd: runDevToEnd,
+  get goldenManifest() { return goldenManifest; } };
