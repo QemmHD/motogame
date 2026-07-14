@@ -97,8 +97,8 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 | Profile | Local frame-work p95 | Diagnostic pacing p95 | Work budget | Result |
 |---|---:|---:|---:|---|
-| 1280 × 720, DPR 1, desktop | 0.60 ms | 7.20 ms | 20 ms | Pass |
-| 390 × 844, DPR 2, mobile/touch emulation | 0.70 ms | 10.70 ms | 25 ms | Pass |
+| 1280 × 720, DPR 1, desktop | 1.00 ms | 3.70 ms | 20 ms | Pass |
+| 390 × 844, DPR 2, mobile/touch emulation | 0.81 ms | 3.70 ms | 25 ms | Pass |
 
 Both observed main-thread work p95 values are below the roadmap's 16.7 ms target. Pacing remains visible as a separate diagnostic because headless scheduling is not portable across hosts. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state.
 

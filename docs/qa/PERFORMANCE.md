@@ -15,8 +15,8 @@ The latest standalone run used a local **system-installed Chrome in headless mod
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 0.60 ms | 1.12 ms | 7.20 ms | p95 < 20 ms | Pass |
-| Mobile 390 × 844 @2 | 360 frames | 0.30 ms | 0.70 ms | 2.82 ms | 10.70 ms | p95 < 25 ms | Pass |
+| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 1.00 ms | 3.38 ms | 3.70 ms | p95 < 20 ms | Pass |
+| Mobile 390 × 844 @2 | 360 frames | 0.40 ms | 0.81 ms | 2.44 ms | 3.70 ms | p95 < 25 ms | Pass |
 
 Both callback-work p95 measurements are below their repository budgets. `Work` is the synchronous duration of the game's animation-frame callback, including fixed-step updates, presentation updates, and canvas command submission. `Pacing` is the existing runtime's callback-to-callback wall interval; it remains visible as a diagnostic but is not gated on shared CI because host scheduling dominates it. Neither view is a universal performance guarantee or a physical-display FPS/GPU claim.
 
@@ -27,7 +27,7 @@ Both callback-work p95 measurements are below their repository budgets. `Work` i
 1. Creates a clean context with the profile viewport, DPR, mobile, and touch settings.
 2. Injects a preallocated 360-value wrapper around `requestAnimationFrame` before any game script runs; the wrapper records only synchronous callback work.
 3. Blocks service workers so cached files cannot hide a missing runtime dependency.
-4. Opens level 1 with development capture, touch, and autoplay flags.
+4. Opens Cliffhanger (level 5) with development capture, touch, and autoplay flags. Its clean reference route lasts long enough that even a slow hosted scheduler remains in active play throughout the bounded ten-second sample window.
 5. Captures page and console errors across measurement and the complete interaction matrix.
 6. Warms the runtime for 750 ms, then resets the runtime telemetry and harness probe together.
 7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 7 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.

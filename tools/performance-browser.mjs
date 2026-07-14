@@ -30,6 +30,7 @@ const FRAME_WORK_SAMPLE_CAPACITY = 360;
 const FRAME_WORK_SAMPLE_TARGET = 180;
 const MINIMUM_MEASUREMENT_MS = 3_000;
 const SAMPLE_TARGET_TIMEOUT_MS = 7_000;
+const PERFORMANCE_LEVEL = 5;
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -369,7 +370,7 @@ async function runProfile(browser, baseUrl, profile) {
   });
 
   try {
-    await page.goto(`${baseUrl}/index.html?dev&capture&touch&autoplay&level=1`, {
+    await page.goto(`${baseUrl}/index.html?dev&capture&touch&autoplay&level=${PERFORMANCE_LEVEL}`, {
       waitUntil: 'load',
       timeout: 15_000,
     });
