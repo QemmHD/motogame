@@ -29,6 +29,7 @@
   <img alt="16 verified Gold Runs" src="https://img.shields.io/badge/Gold%20Runs-16%2F16-ffd23e">
   <img alt="108 deterministic system tests" src="https://img.shields.io/badge/system%20tests-108%2F108-2b9f71">
   <img alt="offline-ready PWA" src="https://img.shields.io/badge/PWA-offline--ready-6c52b8">
+  <a href="https://github.com/QemmHD/motogame/actions/runs/29319685056"><img alt="v1.8 hosted gate passing" src="https://img.shields.io/badge/hosted%20gate-passing-2b9f71"></a>
 </p>
 
 ---
@@ -112,7 +113,7 @@ The normal crash camera measures a bounded detached pose, frames rider and bike 
 
 The authoritative crash contract is unchanged: manual retry is still recorded on a fixed tick, automatic checkpoint retry still uses the same `1.85` second session timer, and Crash Theater never writes run, bike, checkpoint, rules, platform, score, or replay-proof state after failure. Build/cache identity advances to `1.8.0`, but replay schema `1`, `physics-4`, and `course-4` remain current. Gold tokens were refreshed only because build identity is part of compatibility; all 16 course outcomes and authoritative state hashes are identical to v1.7 outside version-bearing tokens.
 
-The complete local v1.8 gate passes: 3/3 asset/offline subtests, 108/108 deterministic system subtests, 16/16 physics/rules routes, 16 Gold tapes replayed twice for 32 exact passes, two ordinary browser profiles, and three dedicated crash-browser profiles. The final aggregate run measured ordinary callback-work p95 at **1.00 ms desktop** and **0.81 ms mobile DPR 2**. Unfrozen crash scenes measured **1.60 ms p95** on desktop and **1.50 ms p95** on mobile DPR 2 (181 samples each); the Reduced Motion profile retained pose tick `0`. Every crash profile then held an exact frozen review for 112 tick-equivalent intervals and retried cleanly. Four deterministic Canvas captures were generated twice with zero pixel differences in the recorded run and inspected at full resolution. The draft PR, hosted gate, physical-device matrix, and production smoke remain `pending`.
+The complete local v1.8 gate passes: 3/3 asset/offline subtests, 108/108 deterministic system subtests, 16/16 physics/rules routes, 16 Gold tapes replayed twice for 32 exact passes, two ordinary browser profiles, and three dedicated crash-browser profiles. The final aggregate run measured ordinary callback-work p95 at **1.00 ms desktop** and **0.81 ms mobile DPR 2**. Unfrozen crash scenes measured **1.60 ms p95** on desktop and **1.50 ms p95** on mobile DPR 2 (181 samples each); the Reduced Motion profile retained pose tick `0`. Every crash profile then held an exact frozen review for 112 tick-equivalent intervals and retried cleanly. Four deterministic Canvas captures were generated twice with zero pixel differences in the recorded run and inspected at full resolution. [Hosted Actions run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) independently passed the complete gate at gameplay SHA `89e5f7d` and correctly skipped publishing. Physical-device coverage and production smoke remain `pending`.
 
 Read the [v1.8 release record](docs/releases/v1.8.0.md), [project pickup state](docs/PROJECT_STATE.md), or [Gold catalog](docs/qa/GOLDEN_TAPES.md).
 
@@ -275,7 +276,9 @@ design/                 Feel specification and production asset inventory
 | | |
 |---|---|
 | **Current candidate** | v1.8.0 — Crash Theater |
-| **Draft review** | `pending`; v1.7 remains preserved in [PR #2](https://github.com/QemmHD/motogame/pull/2) |
+| **Draft review** | [PR #3 — Ship v1.8.0: Crash Theater](https://github.com/QemmHD/motogame/pull/3) |
+| **Gameplay commit** | [`89e5f7d9757e`](https://github.com/QemmHD/motogame/commit/89e5f7d9757eb90ae1f58f5dfd6914d5aaa7aad4) |
+| **Hosted QA** | [Actions 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed; publish skipped |
 | **Course count** | 16 across three worlds |
 | **Reference coverage** | 16/16 repository recovery tapes, each verified twice |
 | **Effects ceiling** | 636 live items across particles, popups, and tracks |
@@ -287,7 +290,7 @@ design/                 Feel specification and production asset inventory
 
 ## Release-candidate honesty
 
-`v1.8.0` describes this unmerged repository branch. Its local cumulative gates and four-image gallery are complete; its draft PR, hosted gate, physical-device matrix, and production deployment are still `pending`. The public play link may remain on an earlier production build until the candidate is pushed, reviewed, merged to an eligible branch, published by GitHub Pages, and smoke-tested at the canonical URL.
+`v1.8.0` describes the unmerged candidate in draft [PR #3](https://github.com/QemmHD/motogame/pull/3). Its local cumulative gate, hosted gate, and four-image gallery are complete; the physical-device matrix and production deployment are still `pending`. The public play link may remain on an earlier production build until the candidate is reviewed, merged to an eligible branch, published by GitHub Pages, and smoke-tested at the canonical URL.
 
 The performance numbers above come from the documented local headless Chrome profiles. They protect against repeatable regressions; they do not replace physical-device testing across different chipsets, thermal states, browsers, or refresh rates. Gold Runs are deterministic automation recovery references, not claims of clean human mastery or final star-time balance.
 

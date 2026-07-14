@@ -34,6 +34,23 @@ The desktop and mobile profiles advanced 99 and 91 fixed ticks respectively. The
 
 The two timed profiles run unfrozen while crashed-session ticks, the retry timer, ragdoll stepping/contact, impact draining, particles, and camera work advance. Every profile also verifies the exact 17-part order, matching Canvas cause/card text, finite pose and camera output, bounded effects, a separately frozen review state, checkpoint retry, and clean post-retry reset. The Reduced Motion case advances the crashed-session timer while proving a static pose invariant instead of reporting a meaningless animation timing percentile.
 
+### Hosted Actions confirmation — v1.8.0
+
+[GitHub Actions run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056), pinned to gameplay SHA [`89e5f7d9757e`](https://github.com/QemmHD/motogame/commit/89e5f7d9757eb90ae1f58f5dfd6914d5aaa7aad4), passed the complete draft-PR gate on the hosted Ubuntu runner:
+
+| Ordinary profile | Samples | Work mean | Work p50 | Work p95 | Work p99 | Work max | Pacing p95 | Peak effects | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Desktop 1280 × 720 @1 | 182 | 0.89 ms | 0.90 ms | 1.20 ms | 1.32 ms | 3.10 ms | 83.40 ms | 92/636 | Pass |
+| Mobile 390 × 844 @2 | 181 | 0.85 ms | 0.80 ms | 1.20 ms | 1.80 ms | 2.80 ms | 116.70 ms | 99/636 | Pass |
+
+| Crash profile | Parts | Pose ticks | Raw contacts | Samples | Work p95 | Budget | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Desktop TNT | 17 | 177 | 1,894 | 182 | 2.29 ms | p95 < 8 ms | Pass |
+| Mobile DPR 2 saw | 17 | 168 | 1,287 | 183 | 2.50 ms | p95 < 12 ms | Pass |
+| Reduced Motion crusher | 17 | 0 | 0 | — | not timed | static invariant | Pass |
+
+The hosted gate also passed 3 asset/offline checks, 108 deterministic system subtests, all 16 routes, and all 16 Gold tapes twice. Both dynamic crashes measured unfrozen work, then all three profiles held the frozen review and retried cleanly. Pacing remains diagnostic shared-runner scheduling; the strict work budgets passed. Publishing was correctly skipped because the event was a draft pull request rather than an eligible push to `main`.
+
 ## Preserved local reference — v1.7.0
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |

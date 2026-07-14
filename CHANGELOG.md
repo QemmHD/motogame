@@ -4,7 +4,7 @@ All notable Moto Rush X3 changes are recorded here so development can resume wit
 
 ## [1.8.0] — 2026-07-14 — Crash Theater (unmerged release candidate)
 
-This candidate advances U05 with a presentation-only crash overhaul. The complete local release gate and four-image visual record pass; draft PR/hosted Actions, physical-device coverage, and production deployment remain `pending`.
+This candidate advances U05 with a presentation-only crash overhaul. The complete local release gate, four-image visual record, and draft-PR hosted gate pass; physical-device coverage and production deployment remain `pending`.
 
 ### Added
 
@@ -46,10 +46,11 @@ This candidate advances U05 with a presentation-only crash overhaul. The complet
 - **Ordinary browser profiles:** the final aggregate run collected 360 samples per profile and measured callback-work p95 at 1.00 ms desktop and 0.81 ms mobile DPR 2 against 8/12 ms budgets; the complete interruption/layout matrix passed.
 - **Crash browser profiles:** an unfrozen desktop TNT scene measured 1.60 ms p95 across 181 samples, an unfrozen mobile DPR 2 saw scene measured 1.50 ms across 181 samples, and Reduced Motion crusher retained pose tick `0`; all three then held the frozen review state for 112 tick-equivalent intervals and retried cleanly.
 - **Visual QA:** four real Canvas captures were generated twice, matched with zero pixel differences in the recorded run, and were inspected at full resolution for desktop composition, exact proxies, mobile framing, and Reduced Motion behavior.
+- **Hosted QA:** draft [PR #3](https://github.com/QemmHD/motogame/pull/3) pins gameplay SHA `89e5f7d9757e`; [Actions run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed the complete gate. Hosted ordinary p95 was 1.20 ms for both profiles; unfrozen crash p95 was 2.29 ms desktop and 2.50 ms mobile. The publish job was correctly skipped.
 
 ### Pending before promotion
 
-- Draft PR, hosted Actions confirmation, physical keyboard/touch/gamepad and crash-cause matrix, low-end-device profiling, review, eligible merge, and production Pages/cache/install/offline smoke.
+- Physical keyboard/touch/gamepad and crash-cause matrix, low-end-device profiling, review, eligible merge, and production Pages/cache/install/offline smoke.
 
 ## [1.7.0] — 2026-07-13 — Vector Weave (release candidate)
 

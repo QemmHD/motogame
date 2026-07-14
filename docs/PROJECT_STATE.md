@@ -15,13 +15,15 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Replay identity | schema `1`; physics `physics-4`; course `course-4` |
 | Working branch | `agent/motorush-v18-crash-theater` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
-| Draft pull request | v1.8: `pending`; [v1.7 draft `#2`](https://github.com/QemmHD/motogame/pull/2) and v1.6 draft `#1` remain preserved |
-| Candidate delivery state | Local unmerged v1.8 candidate; complete local gate and four-image visual record pass, while push/PR, hosted gate, physical-device coverage, and production are `pending` |
+| Gameplay commit | [`89e5f7d9757e`](https://github.com/QemmHD/motogame/commit/89e5f7d9757eb90ae1f58f5dfd6914d5aaa7aad4) |
+| Draft pull request | [v1.8 draft `#3`](https://github.com/QemmHD/motogame/pull/3); v1.7 draft `#2` and v1.6 draft `#1` remain preserved |
+| Hosted gate | [Actions run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed at the gameplay commit; publish skipped |
+| Candidate delivery state | Pushed unmerged v1.8 draft candidate; complete local/hosted gates and four-image visual record pass, while physical-device coverage and production are `pending` |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
 
-The current v1.8 worktree is not yet represented by a pushed draft PR. Its complete local gate and inspected gallery are recorded below; use `git branch --show-current`, `git rev-parse HEAD`, and `git status -sb` for local coordinates until an actual v1.8 PR URL and gameplay SHA are recorded. The pushed v1.7 predecessor remains reviewable in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2), separately from preserved v1.6 draft PR `#1`. Do not describe v1.8 as pushed, hosted-gate green, merged, deployed, or live until each state has direct evidence.
+The v1.8 gameplay candidate is pushed in draft [PR #3](https://github.com/QemmHD/motogame/pull/3) at SHA `89e5f7d9757e`. [Hosted Actions 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed the complete gate and skipped publishing, preserving the main-only deployment boundary. The v1.7 predecessor remains reviewable in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2), separately from preserved v1.6 draft PR `#1`. Do not describe v1.8 as merged, deployed, production-smoked, or live until each state has direct evidence.
 
 The build-version field is part of replay compatibility. Repository Gold tokens were intentionally refreshed for `1.8.0` while replay schema `1`, `physics-4`, and `course-4` remain unchanged. A direct v1.7/v1.8 manifest comparison finds no changed non-token field for any of the 16 routes: finish/replay/run ticks, elapsed/net time, score, crash/recovery count, and authoritative state hashes are identical. This is a build-only compatibility refresh for presentation and cache identity, not a physics or course migration.
 
@@ -145,7 +147,7 @@ The final v1.8 aggregate run used Chrome 150 and recorded both the ordinary play
 
 The ordinary profiles retained 69/636 peak effects each. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state. The two dynamic crash profiles advanced to pose ticks 177/168 with 1,894/1,287 raw contacts while their crashed sessions, ragdoll contact, impacts, particles, camera, and retry timers remained live. Every crash profile verifies 17 parts, the authored cause/card, a finite camera/pose, a separately frozen 112-tick-equivalent review window, bounded effects, and clean retry/reset. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone.
 
-The preserved [v1.7 hosted Actions run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559), pinned to gameplay SHA `3b1cd56`, passed its predecessor 3/87/16/32/2 gate at 1.10 ms work p95 for both ordinary profiles. Publishing was correctly skipped for that draft PR. v1.8 hosted evidence remains separate and pending until its branch and draft PR exist.
+[v1.8 hosted Actions run `29319685056`](https://github.com/QemmHD/motogame/actions/runs/29319685056), pinned to gameplay SHA `89e5f7d9757e`, passed 3 assets, 108 systems, 16 routes, 32 Gold replays, 2 ordinary profiles, and 3 crash profiles. Hosted ordinary work p95 was 1.20 ms for both profiles; unfrozen crash p95 was 2.29 ms desktop TNT and 2.50 ms mobile DPR 2 saw. The Reduced Motion profile retained pose tick `0`, and publishing was correctly skipped. The preserved [v1.7 hosted run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559) remains predecessor evidence.
 
 ## Repository Gold Run evidence
 
@@ -259,11 +261,11 @@ The v1.5 Gold/reference/collision gallery and v1.4 gallery remain preserved unde
 
 | Update | Status in v1.8 candidate | Evidence | Still open |
 |---|---|---|---|
-| U01 Release Gate | Release candidate | Complete local v1.8 gate: 3 assets, 108 systems, 16 routes, 32 Gold passes, 2 ordinary browser profiles, 3 crash profiles | Hosted gate, eligible deploy, production cache/install/offline smoke |
+| U01 Release Gate | Release candidate | Complete local and hosted v1.8 gates: 3 assets, 108 systems, 16 routes, 32 Gold passes, 2 ordinary browser profiles, 3 crash profiles | Eligible deploy and production cache/install/offline smoke |
 | U02 Restart Contract | Partial foundation | Shared DOM-free session, 50-repeat rules restore, exact hazard/platform snapshots, extracted ride input | Physical keyboard/touch/gamepad results/restart matrix and further module splits |
 | U03 Smooth Ride | Release candidate | Hard-bounded 384/32/220 pools, typed-ring metrics, 17 input tests, 6 metric tests, 2-profile p95, cancel/blur/rotation/left-hand matrix | Physical low-end phone and production-profile confirmation |
 | U04 Collision Keystone | Partial foundation | Swept platforms/hazards, stateless swept Kinetic Looms, bounded proxies, aligned browser overlay, retry fixtures | General moving/rotating/two-sided closed chains |
-| U05 Crash Theater | Release candidate | 17-part Splitline rig, ten causes, detached swept contact, 48-event impact bound, seeded FX/camera, ragdoll proxies, 30 finite/settling scripts, exact repeat, Reduced Motion invariants, 3 crash-browser profiles, 4 inspected captures | Hosted gate and physical cause/retry matrix |
+| U05 Crash Theater | Release candidate | 17-part Splitline rig, ten causes, detached swept contact, 48-event impact bound, seeded FX/camera, ragdoll proxies, 30 finite/settling scripts, exact repeat, Reduced Motion invariants, local/hosted crash-browser passes, 4 inspected captures | Physical cause/retry matrix |
 | U07 Engine Soul | Playable preview | Landing grades, momentum retention, five gear bands, reactive audio | Wheelie meter, tire/surface layers, measured envelopes/audio budget |
 | U09 Proof Replays | Release candidate | 16 build-refreshed tapes, 32 exact browser passes, no non-token v1.7 outcome change, explicit mismatch UI | Human route classes remain U10/U14 work |
 | U10 Moving Ground | Playable preview | Ten-cycle carry, bounded inheritance, triggered lift, exact restore, proxy audit | Broader/rotating geometry, dedicated framing, human safe/apex tapes |
@@ -274,7 +276,7 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Known gaps and risks
 
-- **Candidate delivery:** v1.8 has no recorded push, draft PR, or hosted run yet. Its complete local gate and inspected image set do not substitute for those states.
+- **Candidate delivery:** v1.8 is pushed in draft PR #3 with a passing hosted gate and publish skipped; it remains unmerged and unreviewed for production promotion.
 - **Production:** the live URL can remain on an older build until review, eligible merge, publish, and direct smoke; local candidate tests are not production evidence.
 - **Crash visuals:** the four required browser captures pass local full-resolution inspection; physical browser/device rendering and the eventual production build remain unverified.
 - **Crash devices:** all ten causes, rapid manual retry, automatic retry, audio overlap, haptics, rotation, and long heavy-crash sessions still need representative physical keyboard/touch/gamepad and low-end-device smoke.
@@ -288,11 +290,10 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Immediate next priorities
 
-1. Push the branch, open a draft v1.8 PR, pin its gameplay SHA, add the completed gallery to the PR, watch hosted Actions, and record the run URL plus publish-skipped state. Do not merge or deploy without explicit review/authorization.
-2. Exercise all ten causes and retry timing on keyboard, multitouch, and real gamepad, then repeat heavy crash scenes on a deliberately low-end Android device and representative iOS hardware.
-3. Promote only after review; verify visible `v1.8.0`, eligible Pages workflow, cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
-4. Continue U04 with broader moving/rotating or closed collision chains, keeping proof/version and reset implications explicit; separately human-tune Vector Weave without replacing the deterministic recovery reference.
-5. Record human safe/apex runs separately from recovery references, and keep extracting audio, persistence, renderer, and UI ownership without changing fixed-step authority.
+1. Exercise all ten causes and retry timing on keyboard, multitouch, and real gamepad, then repeat heavy crash scenes on a deliberately low-end Android device and representative iOS hardware.
+2. Promote only after review; verify visible `v1.8.0`, eligible Pages workflow, cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
+3. Continue U04 with broader moving/rotating or closed collision chains, keeping proof/version and reset implications explicit; separately human-tune Vector Weave without replacing the deterministic recovery reference.
+4. Record human safe/apex runs separately from recovery references, and keep extracting audio, persistence, renderer, and UI ownership without changing fixed-step authority.
 
 ## Local QA routes
 
