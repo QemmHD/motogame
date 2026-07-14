@@ -90,7 +90,7 @@ Dust, debris, smoke, sparks, confetti, score popups, and tire tracks run through
 
 A fixed-ring telemetry module records frame time, simulation ticks, catch-up pressure, clamped time, viewport changes, and effect-pool activity without allocating a new sample object each frame. Development telemetry reports FPS, mean, p50, p95, p99, maximum frame time, slow frames, effect peaks, reuse, and evictions.
 
-The final clean local headless Chrome gate recorded **7.10 ms desktop p95** against a 20 ms regression budget and **10.70 ms mobile DPR 2 p95** against a 25 ms budget. These figures are reproducible automation evidence from the current development machine, not physical-device certification.
+The final clean local headless Chrome gate recorded **8.12 ms desktop p95** against a 20 ms regression budget and **11.21 ms mobile DPR 2 p95** against a 25 ms budget. These figures are reproducible maximum-throughput automation evidence from the current development machine, not physical-device certification.
 
 ### Interruption-safe input
 

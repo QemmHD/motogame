@@ -60,10 +60,23 @@ function browserCandidates() {
 }
 
 /** Launch an installed Chromium-family browser without downloading anything. */
-export async function launchInstalledBrowser() {
+export async function launchInstalledBrowser(options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('Browser launch options must be an object');
+  }
+  const extraArgs = options.extraArgs ?? [];
+  if (!Array.isArray(extraArgs)
+      || extraArgs.some(argument => typeof argument !== 'string' || argument.length === 0)) {
+    throw new TypeError('Browser launch extraArgs must be an array of non-empty strings');
+  }
   const candidates = browserCandidates();
   const attempts = [];
-  const args = ['--disable-background-networking', '--disable-component-update', '--mute-audio'];
+  const args = [
+    '--disable-background-networking',
+    '--disable-component-update',
+    '--mute-audio',
+    ...extraArgs,
+  ];
   if (process.platform === 'linux') args.push('--no-sandbox');
 
   for (const candidate of candidates) {

@@ -97,8 +97,8 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 | Profile | Local measured p95 | Current harness budget | Result |
 |---|---:|---:|---|
-| 1280 × 720, DPR 1, desktop | 7.10 ms | 20 ms | Pass |
-| 390 × 844, DPR 2, mobile/touch emulation | 10.70 ms | 25 ms | Pass |
+| 1280 × 720, DPR 1, desktop | 8.12 ms | 20 ms | Pass |
+| 390 × 844, DPR 2, mobile/touch emulation | 11.21 ms | 25 ms | Pass |
 
 Both observed p95 values are below the roadmap's 16.7 ms target. These are repeatable local headless-Chrome measurements, not evidence for every physical phone. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state.
 

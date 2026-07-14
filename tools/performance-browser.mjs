@@ -26,6 +26,12 @@ const PROFILES = Object.freeze([
   }),
 ]);
 
+const PERFORMANCE_BROWSER_ARGS = Object.freeze([
+  // Match the maximum-throughput mode used by the local headless baseline.
+  // This is performance-harness-only; Gold proof verification stays display paced.
+  '--disable-frame-rate-limit',
+]);
+
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -43,6 +49,16 @@ function validatePool(name, stats) {
     `${name} pool created ${stats.created} identities for capacity ${stats.capacity}`);
   invariant(stats.peak >= 0 && stats.peak <= stats.capacity,
     `${name} pool peak exceeded capacity: ${stats.peak}/${stats.capacity}`);
+}
+
+function formatPerformance(profile, performance) {
+  return `${profile.id}: ${performance.sampleCount} frames, `
+    + `mean ${performance.meanFrameMs.toFixed(2)} ms, `
+    + `p50 ${performance.p50FrameMs.toFixed(2)} ms, `
+    + `p95 ${performance.p95FrameMs.toFixed(2)} ms, `
+    + `p99 ${performance.p99FrameMs.toFixed(2)} ms, `
+    + `max ${performance.maxFrameMs.toFixed(2)} ms, `
+    + `${performance.fixedTickCount} fixed ticks`;
 }
 
 async function assertDisjointControlZones(page, label) {
@@ -254,8 +270,9 @@ async function runProfile(browser, baseUrl, profile) {
       performance: window.__moto.performanceSnapshot(),
       pools: window.__moto.effectPoolSnapshot(),
     }));
+    console.log(formatPerformance(profile, measurement.performance));
     invariant(measurement.performance.sampleCount >= 100,
-      `${profile.id} captured only ${measurement.performance.sampleCount} frames`);
+      `${profile.id} captured fewer than 100 frames; ${formatPerformance(profile, measurement.performance)}`);
     invariant(measurement.state === 'playing',
       `${profile.id} was not actively playing during measurement: ${measurement.state}`);
     invariant(measurement.performance.fixedTickCount >= 60,
@@ -290,20 +307,19 @@ async function runProfile(browser, baseUrl, profile) {
 const server = await startStaticServer(PUBLIC);
 let browser;
 try {
-  const launched = await launchInstalledBrowser();
+  const launched = await launchInstalledBrowser({ extraArgs: PERFORMANCE_BROWSER_ARGS });
   browser = launched.browser;
+  console.log(`Browser: ${launched.source}, ${browser.version()} (${launched.executablePath})`);
   const reports = [];
   for (const profile of PROFILES) {
     const report = await runProfile(browser, server.baseUrl, profile);
     reports.push(report);
     const perf = report.measurement.performance;
     console.log(
-      `${profile.id}: ${perf.sampleCount} frames, p50 ${perf.p50FrameMs.toFixed(2)} ms, `
-      + `p95 ${perf.p95FrameMs.toFixed(2)} ms, p99 ${perf.p99FrameMs.toFixed(2)} ms, `
+      `${profile.id}: passed p95 < ${profile.p95BudgetMs} ms with `
       + `${perf.peakActiveEffects}/${report.measurement.pools.capacity} peak effects`,
     );
   }
-  console.log(`Browser: ${launched.source} (${launched.executablePath})`);
   console.log('Smooth Ride browser gate passed.');
 } catch (error) {
   console.error(error instanceof Error ? error.stack || error.message : String(error));

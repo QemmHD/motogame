@@ -42,6 +42,7 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - Per-tick effect cleanup no longer allocates replacement arrays, and repeated tire tracks no longer require front-array shifts.
 - Performance samples and event counts reject non-finite input, clamp configured bounds, retain exact newest-window ordering across ring wrap, and reset while reusing their typed buffers.
 - Pages publishing is restricted to a successful push on `main`; pull requests and manual dispatches run tests without publishing, and the stale legacy release branch can no longer deploy production.
+- The hosted browser-performance gate now requests maximum-throughput begin frames only for its measurement process and prints the browser version plus complete timing diagnostics before assertions; Gold verification keeps its normal browser launch and the 100-sample/p95 budgets are unchanged.
 
 ### Verification
 
@@ -49,8 +50,8 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - **Deterministic systems:** 76 subtests—44 prior rules/replay/kinematics/ragdoll/session/proxy tests plus 9 effect-pool, 17 input-state, and 6 performance-metrics tests.
 - **Physics/routes:** all 15 authored courses pass the unchanged `physics-3` / `course-3` headless completion and stability gate.
 - **Gold Runs:** all 15 build-compatible references replay twice in clean browser contexts—30 exact passes with no divergence.
-- **Desktop profile:** the final clean local headless-Chrome gate at 1280 × 720 DPR 1 measured p95 7.10 ms.
-- **Mobile profile:** the final clean local headless-Chrome gate at 390 × 844 DPR 2 measured p95 10.70 ms, then passed 390 × 844 and 320 × 568 disjoint/unclipped control geometry, simultaneous touch, pointer cancel, blur pause/clear, 844 × 390 rotation pause/clear, canvas resize, telemetry counters, and left-hand layout assertions.
+- **Desktop profile:** the final clean local headless-Chrome gate at 1280 × 720 DPR 1 measured p95 8.12 ms.
+- **Mobile profile:** the final clean local headless-Chrome gate at 390 × 844 DPR 2 measured p95 11.21 ms, then passed 390 × 844 and 320 × 568 disjoint/unclipped control geometry, simultaneous touch, pointer cancel, blur pause/clear, 844 × 390 rotation pause/clear, canvas resize, telemetry counters, and left-hand layout assertions.
 - **Bounded effects:** browser telemetry and direct tests confirm 384/32/220 hard capacities, 636 total, with created and peak identities never exceeding their owning pool.
 - **Visual QA:** eight reviewed screenshots are stored under `docs/screenshots/v1.6/`.
 

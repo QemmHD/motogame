@@ -15,22 +15,22 @@ The latest standalone run used a local **system-installed Chrome in headless mod
 
 | Profile | Rolling samples | p50 | p95 | p99 | Budget | Status |
 |---|---:|---:|---:|---:|---:|---|
-| Desktop 1280 × 720 @1 | 360 frames | 3.60 ms | 7.10 ms | 7.20 ms | p95 < 20 ms | Pass |
-| Mobile 390 × 844 @2 | 360 frames | 3.60 ms | 10.70 ms | 17.84 ms | p95 < 25 ms | Pass |
+| Desktop 1280 × 720 @1 | 360 frames | 0.60 ms | 8.12 ms | 105.10 ms | p95 < 20 ms | Pass |
+| Mobile 390 × 844 @2 | 360 frames | 2.50 ms | 11.21 ms | 13.30 ms | p95 < 25 ms | Pass |
 
-Both measurements are below their repository budgets. The measurements are local gate evidence only; they are not a universal performance guarantee and should not be read as proof that a phone display renders at roughly 200 FPS. Headless Chrome is not synchronized to a physical display panel in the same way as an interactive device session.
+Both p95 measurements are below their repository budgets. The desktop p99 also records the deliberately uncapped browser's small number of scheduler outliers instead of hiding them. The measurements are local gate evidence only; they are not a universal performance guarantee and should not be read as a physical-display FPS claim. Headless Chrome is not synchronized to a display panel in the same way as an interactive device session.
 
 ## Browser harness procedure
 
 `npm run test:browser-performance` starts a temporary static server for `public/`, locates an installed Chrome/Chromium/Edge browser, and runs the two profiles sequentially. For each profile it:
 
-1. Creates a clean context with the profile viewport, DPR, mobile, and touch settings.
+1. Launches Chrome with `--disable-frame-rate-limit` for this maximum-throughput harness only, then creates a clean context with the profile viewport, DPR, mobile, and touch settings. Gold proof verification does not receive this flag.
 2. Blocks service workers so cached files cannot hide a missing runtime dependency.
 3. Opens level 1 with development capture, touch, and autoplay flags.
 4. Captures page and console errors across measurement and the complete interaction matrix.
 5. Warms the runtime for 750 ms.
 6. Resets telemetry, measures for 3 seconds, and reads a detached report.
-7. Requires at least 100 samples, active play, at least 60 fixed ticks, and nonzero pooled-effect activity; the current 360-frame ring fills during the run.
+7. Prints the browser version and complete mean/p50/p95/p99/max/tick diagnostics before assertions, then requires at least 100 samples, active play, at least 60 fixed ticks, and nonzero pooled-effect activity; the current 360-frame ring fills during the run.
 8. Requires p95 frame time to remain below the profile budget.
 9. Validates that active/created/peak effects stay within each fixed pool capacity.
 10. Runs the interruption and control-layout matrix on the mobile profile, including 390 × 844 and 320 × 568 target separation.
