@@ -4,7 +4,7 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 
 ## Acceptance profiles
 
-| Profile ID | Viewport | DPR | Browser flags | p95 budget |
+| Profile ID | Viewport | DPR | Browser context | Frame-work p95 budget |
 |---|---:|---:|---|---:|
 | `desktop-1280x720-dpr1` | 1280 × 720 | 1 | desktop, no touch | < 20 ms |
 | `mobile-390x844-dpr2` | 390 × 844 | 2 | mobile context, touch enabled | < 25 ms |
@@ -13,28 +13,29 @@ The latest standalone run used a local **system-installed Chrome in headless mod
 
 ## Latest measured result
 
-| Profile | Rolling samples | p50 | p95 | p99 | Budget | Status |
-|---|---:|---:|---:|---:|---:|---|
-| Desktop 1280 × 720 @1 | 360 frames | 0.60 ms | 8.12 ms | 105.10 ms | p95 < 20 ms | Pass |
-| Mobile 390 × 844 @2 | 360 frames | 2.50 ms | 11.21 ms | 13.30 ms | p95 < 25 ms | Pass |
+| Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 0.60 ms | 1.12 ms | 7.20 ms | p95 < 20 ms | Pass |
+| Mobile 390 × 844 @2 | 360 frames | 0.30 ms | 0.70 ms | 2.82 ms | 10.70 ms | p95 < 25 ms | Pass |
 
-Both p95 measurements are below their repository budgets. The desktop p99 also records the deliberately uncapped browser's small number of scheduler outliers instead of hiding them. The measurements are local gate evidence only; they are not a universal performance guarantee and should not be read as a physical-display FPS claim. Headless Chrome is not synchronized to a display panel in the same way as an interactive device session.
+Both callback-work p95 measurements are below their repository budgets. `Work` is the synchronous duration of the game's animation-frame callback, including fixed-step updates, presentation updates, and canvas command submission. `Pacing` is the existing runtime's callback-to-callback wall interval; it remains visible as a diagnostic but is not gated on shared CI because host scheduling dominates it. Neither view is a universal performance guarantee or a physical-display FPS/GPU claim.
 
 ## Browser harness procedure
 
 `npm run test:browser-performance` starts a temporary static server for `public/`, locates an installed Chrome/Chromium/Edge browser, and runs the two profiles sequentially. For each profile it:
 
-1. Launches Chrome with `--disable-frame-rate-limit` for this maximum-throughput harness only, then creates a clean context with the profile viewport, DPR, mobile, and touch settings. Gold proof verification does not receive this flag.
-2. Blocks service workers so cached files cannot hide a missing runtime dependency.
-3. Opens level 1 with development capture, touch, and autoplay flags.
-4. Captures page and console errors across measurement and the complete interaction matrix.
-5. Warms the runtime for 750 ms.
-6. Resets telemetry, measures for 3 seconds, and reads a detached report.
-7. Prints the browser version and complete mean/p50/p95/p99/max/tick diagnostics before assertions, then requires at least 100 samples, active play, at least 60 fixed ticks, and nonzero pooled-effect activity; the current 360-frame ring fills during the run.
-8. Requires p95 frame time to remain below the profile budget.
-9. Validates that active/created/peak effects stay within each fixed pool capacity.
-10. Runs the interruption and control-layout matrix on the mobile profile, including 390 × 844 and 320 × 568 target separation.
-11. Closes each context, the browser, and the temporary server even if an assertion fails.
+1. Creates a clean context with the profile viewport, DPR, mobile, and touch settings.
+2. Injects a preallocated 360-value wrapper around `requestAnimationFrame` before any game script runs; the wrapper records only synchronous callback work.
+3. Blocks service workers so cached files cannot hide a missing runtime dependency.
+4. Opens level 1 with development capture, touch, and autoplay flags.
+5. Captures page and console errors across measurement and the complete interaction matrix.
+6. Warms the runtime for 750 ms, then resets the runtime telemetry and harness probe together.
+7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 7 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.
+8. Prints browser version plus complete work and pacing diagnostics before assertions, requires matching probe/runtime sample counts, active play, at least 60 fixed ticks, and nonzero pooled-effect activity.
+9. Requires main-loop work p95 to remain below the profile budget while retaining pacing p95 as a diagnostic.
+10. Validates that active/created/peak effects stay within each fixed pool capacity.
+11. Runs the interruption and control-layout matrix on the mobile profile, including 390 × 844 and 320 × 568 target separation.
+12. Closes each context, the browser, and the temporary server even if an assertion fails.
 
 Reproduce it from the repository root:
 
@@ -53,7 +54,9 @@ npm run test:performance
 
 ## Telemetry design
 
-The live recorder uses eight preallocated typed arrays in a fixed **360-frame rolling ring** for frame duration, fixed ticks, backlog ticks, dropped time, clamped time, active effects, pooled/created effects, and effect capacity. The record path validates and clamps numeric samples, writes the current slot, and updates scalar counters. It does not grow an array or construct a per-frame report.
+The live recorder uses eight preallocated typed arrays in a fixed **360-frame rolling ring** for callback-to-callback wall interval, fixed ticks, backlog ticks, dropped time, clamped time, active effects, pooled/created effects, and effect capacity. The record path validates and clamps numeric samples, writes the current slot, and updates scalar counters. It does not grow an array or construct a per-frame report.
+
+The browser harness adds a separate test-only 360-value `Float64Array` ring around the one game animation callback. This separates synchronous main-loop work from time spent waiting for a hosted browser to schedule the next callback. Its reset and record paths reuse fixed storage; only the requested final snapshot copies and sorts values.
 
 A snapshot is an explicit cold-path operation. It copies the current window, sorts the frame-time values, and produces a detached object containing:
 
@@ -109,6 +112,6 @@ These screenshots show the live runtime and telemetry panel. They are supporting
 
 ## Interpretation and limits
 
-This gate is designed to catch regressions such as an effect array growing without bound, fresh effect identity churn, a slow percentile moving beyond budget, fixed-step backlog, stale controls after pointer cancellation, or layout/input ownership disagreeing after rotation.
+This gate is designed to catch regressions such as an effect array growing without bound, fresh effect identity churn, synchronous main-loop work moving beyond budget, fixed-step backlog, stale controls after pointer cancellation, or layout/input ownership disagreeing after rotation. Pacing remains visible to expose scheduler stalls, but it is not confused with the callback-work regression budget.
 
 It does not substitute for profiling a production build on physical hardware. Before production release, record a comparable 10+ minute run on representative low/mid-tier Android hardware and an iPhone-class device. Include heavy dust/confetti/crash scenes, repeated retries, portrait/landscape rotation, background/foreground, real multi-touch, audio, haptics, browser UI expansion/collapse, thermal behavior, and battery impact. Also smoke-test the published GitHub Pages URL with a clean cache and an installed offline PWA.
