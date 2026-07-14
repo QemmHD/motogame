@@ -8,15 +8,17 @@ Compatibility identity:
 |---|---|
 | Manifest schema | `1` |
 | Replay schema | `1` |
-| Runtime build | `1.6.0` |
-| Physics | `physics-3` |
-| Course generator | `course-3` |
+| Runtime build | `1.7.0` |
+| Physics | `physics-4` |
+| Course generator | `course-4` |
 | Route class | `recovery` |
 
-Manifest SHA-256 for this candidate: `368D4728F9D60F9A07C1375AF3B9D5B18FEC8200A030633CC2679A2DB7701C08`.
-The v1.6 regeneration was required by the intentional build-compatibility bump. Physics remains
-`physics-3`, course generation remains `course-3`, and every finish tick, run tick, time, score,
-recovery count, and authoritative state hash stayed equal to the reviewed v1.5 catalog.
+Manifest SHA-256 for this candidate: `4DE1BA93FC84C1E51E47A8EFEBB64C5634F042B62DE9913B8DEE97C6C6C4B3E9`.
+The v1.7 regeneration is intentional: build, physics, and course identities advanced for Kinetic
+Loom authority and the new Vector Weave route. For levels 1–15, finish tick, run tick, elapsed/net
+time, score, recovery count, and authoritative state hash remain byte-value identical to the
+reviewed v1.6 catalog; only their required version-bearing tokens changed. Level 16 adds a new
+recovery reference.
 
 ## Current reference catalog
 
@@ -37,6 +39,7 @@ recovery count, and authoritative state hash stayed equal to the reviewed v1.5 c
 | 13 | Freight Flight | R&D Yard | 898 | 559 | 14.97s | 2,040 | 2 |
 | 14 | Lift Logic | R&D Yard | 773 | 506 | 12.88s | 934 | 2 |
 | 15 | Proof Circuit | R&D Yard | 407 | 407 | 6.78s | 2,754 | 0 |
+| 16 | Vector Weave | R&D Yard | 258 | 258 | 4.30s | 3,644 | 0 |
 
 `Finish tick` counts every recorded fixed tick, including crash/restart ticks. `Run tick` is the restored machine timeline at the finish and therefore can be smaller when checkpoint recovery occurred.
 

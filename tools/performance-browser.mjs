@@ -473,7 +473,7 @@ try {
       + `${report.measurement.pools.capacity} peak effects and ${work.sampleCount} samples`,
     );
   }
-  console.log('Smooth Ride browser gate passed.');
+  console.log('Moto Rush X3 browser gate passed.');
 } catch (error) {
   console.error(error instanceof Error ? error.stack || error.message : String(error));
   process.exitCode = 1;

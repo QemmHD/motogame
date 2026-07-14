@@ -54,5 +54,6 @@ export const STR = {
   landingPerfect: 'PERFECT LANDING!', landingClean: 'CLEAN LANDING!',
   landingRough: 'ROUGH LANDING', landingSlam: 'HARD SLAM',
   liftOnline: 'LIFT ONLINE!',
+  vectorLock: 'VECTOR LOCK!',
   bestScore: 'BEST',
 };

@@ -201,6 +201,52 @@ test('platform proxies preserve exact sampled pose rectangles and surface veloci
   assert.deepEqual(run, before);
 });
 
+test('force-zone proxies preserve exact field bounds and clipped direction arrows', () => {
+  const forceZones = {
+    zones: [{
+      id: 'crosswind-a',
+      kind: 'crosswind',
+      enabled: true,
+      x: 320,
+      y: 160,
+      width: 240,
+      height: 120,
+      bounds: { left: 200, right: 440, top: 100, bottom: 220 },
+      acceleration: { x: 360, y: -90 },
+      angularAcceleration: 1.75,
+      render: { model: 'kinetic-loom', label: 'CROSSWIND', color: '#55d8ff' },
+    }],
+  };
+  const before = structuredClone(forceZones);
+  const snapshot = buildDebugProxySnapshot({ forceZones });
+  const proxy = snapshot.forceZones[0];
+
+  assert.equal(snapshot.forceZones.length, 1);
+  assert.deepEqual(proxy, {
+    id: 'crosswind-a',
+    active: true,
+    kind: 'crosswind',
+    bounds: { left: 200, right: 440, top: 100, bottom: 220 },
+    center: { x: 320, y: 160 },
+    acceleration: { x: 360, y: -90 },
+    angularAcceleration: 1.75,
+    arrow: { x1: 320, y1: 160, x2: 440, y2: 130 },
+    render: { model: 'kinetic-loom', label: 'CROSSWIND', color: '#55d8ff' },
+  });
+  assert.deepEqual(forceZones, before);
+
+  const authored = buildDebugProxySnapshot({
+    level: { course: { forceZones: forceZones.zones } },
+  });
+  assert.deepEqual(authored.forceZones, snapshot.forceZones,
+    'authored fallback should use the same rectangle contract');
+
+  proxy.bounds.left = -1;
+  proxy.acceleration.x = -1;
+  proxy.render.label = 'MUTATED';
+  assert.deepEqual(forceZones, before, 'force-zone proxy mutations leaked into runtime state');
+});
+
 test('malformed oversized inputs are finite, bounded, detached, and report truncation', () => {
   const makeSegment = (index) => ({
     ax: index % 2 ? Infinity : index * 1e20,
@@ -236,6 +282,19 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
       surface: 'metal',
     },
   });
+  const makeForceZone = (index) => ({
+    id: `force-zone-${index}`,
+    kind: 'crosswind',
+    enabled: index % 2 === 0,
+    x: Infinity,
+    y: NaN,
+    width: 1e20,
+    height: -Infinity,
+    bounds: { left: -Infinity, right: Infinity, top: NaN, bottom: 1e30 },
+    acceleration: { x: Infinity, y: -1e40 },
+    angularAcceleration: NaN,
+    render: { model: 'kinetic-loom', label: `zone-${index}`, ignored: index },
+  });
   const source = {
     terrain: {
       segments: Array.from({ length: 9 }, (_, index) => makeSegment(index)),
@@ -250,6 +309,9 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
       tick: -Infinity,
       tickRate: Infinity,
       platforms: Array.from({ length: 7 }, (_, index) => makePlatform(index)),
+    },
+    forceZones: {
+      zones: Array.from({ length: 5 }, (_, index) => makeForceZone(index)),
     },
     bike: {
       x: Infinity,
@@ -272,6 +334,7 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
     maxTerrainSegments: 3,
     maxHazards: 2,
     maxPlatforms: 2,
+    maxForceZones: 2,
     maxCheckpoints: 2,
     maxCoordinate: 1000,
     maxRadius: 100,
@@ -281,11 +344,13 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
   assert.equal(snapshot.terrain.length, 3);
   assert.equal(snapshot.hazards.length, 2);
   assert.equal(snapshot.platforms.length, 2);
+  assert.equal(snapshot.forceZones.length, 2);
   assert.equal(snapshot.checkpoints.length, 2);
   assert.deepEqual(snapshot.truncated, {
     terrainSegments: 6,
     hazards: 6,
     platforms: 5,
+    forceZones: 3,
     checkpoints: 4,
   });
   assert.ok(snapshot.terrain.every((segment) =>
@@ -294,6 +359,9 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
   assert.ok(snapshot.bike.circles.every((circle) => circle.current.r <= 100));
   assert.ok(snapshot.platforms.every((platform) =>
     platform.current.width <= 100 && platform.current.height <= 100));
+  assert.ok(snapshot.forceZones.every((zone) =>
+    zone.arrow.x2 >= zone.bounds.left && zone.arrow.x2 <= zone.bounds.right
+      && zone.arrow.y2 >= zone.bounds.top && zone.arrow.y2 <= zone.bounds.bottom));
   assert.equal(snapshot.limits.markerHalfHeight, 1000);
   assertAllNumbersFinite(snapshot);
   assert.deepEqual(source, before);
@@ -301,5 +369,7 @@ test('malformed oversized inputs are finite, bounded, detached, and report trunc
   snapshot.terrain[0].a.x = 77;
   snapshot.hazards[0].current.x = 88;
   snapshot.platforms[0].current.x = 99;
+  snapshot.forceZones[0].bounds.left = -99;
+  snapshot.forceZones[0].render.label = 'MUTATED';
   assert.deepEqual(source, before, 'renderer mutations leaked back into live state');
 });

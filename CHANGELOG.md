@@ -2,6 +2,45 @@
 
 All notable Moto Rush X3 changes are recorded here so development can resume without reconstructing old decisions from source code. Dates use YYYY-MM-DD.
 
+## [1.7.0] — 2026-07-13 — Vector Weave (release candidate)
+
+This candidate advances U04 Collision Keystone with an original player-facing force-field mechanic. It is tested and screenshot-backed locally, but is not production-live until the branch is reviewed, promoted through an eligible merge, published, and smoke-tested at the canonical Pages URL.
+
+### Added
+
+- A DOM-free `force-zones.js` authority for immutable continuous axis-aligned fields with stable IDs, exact bounds, bounded acceleration, deterministic ID ordering, and detached presentation records.
+- Full-frame exact swept-circle/rectangle detection across the rear wheel, front wheel, and head so thin fields cannot be skipped at high speed and expanded-square corner false positives are rejected.
+- One-call aggregation for overlapping fields: every touched Loom contributes at most once per tick, contributions are stably ordered, and one bounded impulse prevents authored order from changing clamp results.
+- Stateless entry/exit/sweep metadata derived from previous/current geometry, requiring no cooldown table or checkpoint payload.
+- Original **Kinetic Loom** presentation: woven luminous ribbons, repeated directional chevrons, compact steel heads, cyan/magenta/amber roles, fixed-tick animation, static Reduced Motion phase, `VECTOR LOCK!` feedback, synthesized entry cue, camera nudge, and haptics.
+- **Vector Weave**, a sixteenth course and fourth R&D Yard route, with three checkpoints, Flow Assist, Loft Line, Soft Landing, an optional sky deck, and a continuous hazard-free recovery road.
+- Bounded force-zone debug proxies with exact rectangles, center-origin clipped acceleration arrows, active/kind metadata, detached render strings, a Loom count, and truncation reporting.
+- Nine focused force-zone tests plus integrated session/proxy coverage for validation, immutability, boundaries, high-speed sweeps, timestep scaling, overlap order, dormant/crashed no-ops, detached output, invalid impulse atomicity, velocity caps, all-three-field completion, and checkpoint re-entry.
+- A repeatable `tools/capture-v17.mjs` browser harness and four inspected hero, collision, mobile DPR 2, and Reduced Motion images under `docs/screenshots/v1.7/`.
+
+### Changed
+
+- Release/package/cache identity advances to `1.7.0`; authoritative identity advances to `physics-4` and `course-4`; replay schema remains `1`.
+- The public `applyImpulse()` hook now rejects non-finite or malformed inputs, invalid sample timing, and unknown bike modes before mutation; it returns a success/no-op result and preserves the existing ground/air speed and spin clamps.
+- Run-session order now evaluates Kinetic Looms after rules/TNT and before lifecycle entry, with lethal crash and valid finish taking priority; field velocity affects the next fixed physics tick.
+- The service-worker literal precache and asset audit include the new runtime module.
+- The repository/store presentation now targets a 16-course, 16-Gold, screenshot-backed Vector Weave candidate while preserving earlier galleries and release notes.
+
+### Verified
+
+- **Complete local gate:** 3 asset/offline subtests, 87 deterministic system subtests, 16 physics/rules routes, 16 Gold tapes replayed twice (32 exact browser passes), and 2 browser profiles.
+- **Baseline preservation:** levels 1–15 retain identical finish ticks, run ticks, elapsed/net times, scores, recovery counts, and authoritative state hashes outside version-bearing tokens.
+- **Vector Weave:** authoritative session touches and enters all three fields with zero crashes; the Gold route finishes in 258 ticks / 4.30 seconds with 3,644 points and zero recoveries.
+- **Performance:** Chrome 150 recorded 360 samples per profile; work p95 was 1.00 ms desktop against 8 ms and 2.20 ms mobile DPR 2 against 12 ms. Pacing p95 was 3.70 ms for both and remains diagnostic.
+- **Visual QA:** four full-resolution captures were inspected; the collision image aligns Loom art, rectangles, and clipped vectors, while mobile controls remain visible and Reduced Motion retains direction.
+
+### Remaining before promotion
+
+- Human keyboard and touch calibration for Vector Weave recovery, optional-deck readability, and star targets.
+- Representative physical iOS/Android, real gamepad, audio/haptics, long-session, install, offline-relaunch, and low-end-device checks.
+- Hosted v1.7 Actions evidence, eligible Pages publish, cache replacement, visible version, and canonical production smoke.
+- General moving terrain, rotated/two-sided closed chains, and solid side/ceiling contacts remain open U04 work.
+
 ## [1.6.0] — 2026-07-13 — Smooth Ride (release candidate)
 
 This candidate completes the local U03 Smooth Ride acceptance gate. It is not described as production-live or proven on low-end physical hardware until review, eligible-branch publishing, canonical Pages/cache/offline smoke, and real-device checks are complete.

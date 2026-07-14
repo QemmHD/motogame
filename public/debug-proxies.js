@@ -10,6 +10,7 @@ const HARD_LIMITS = Object.freeze({
   terrainSegments: 16384,
   hazards: 2048,
   platforms: 1024,
+  forceZones: 2048,
   checkpoints: 1024,
   coordinate: 100000000,
   radius: 1000000,
@@ -19,6 +20,7 @@ export const DEBUG_PROXY_DEFAULTS = Object.freeze({
   maxTerrainSegments: 4096,
   maxHazards: 512,
   maxPlatforms: 256,
+  maxForceZones: 512,
   maxCheckpoints: 256,
   maxCoordinate: 10000000,
   maxRadius: 100000,
@@ -63,6 +65,8 @@ function normalizeOptions(options = {}) {
       DEBUG_PROXY_DEFAULTS.maxHazards, HARD_LIMITS.hazards),
     maxPlatforms: boundedInteger(options.maxPlatforms,
       DEBUG_PROXY_DEFAULTS.maxPlatforms, HARD_LIMITS.platforms),
+    maxForceZones: boundedInteger(options.maxForceZones,
+      DEBUG_PROXY_DEFAULTS.maxForceZones, HARD_LIMITS.forceZones),
     maxCheckpoints: boundedInteger(options.maxCheckpoints,
       DEBUG_PROXY_DEFAULTS.maxCheckpoints, HARD_LIMITS.checkpoints),
     maxCoordinate,
@@ -259,6 +263,90 @@ function platformProxy(kinematicRun, cfg) {
   return { output, source };
 }
 
+function detachedRenderStrings(value) {
+  if (!value || typeof value !== 'object') return {};
+  const output = {};
+  for (const [rawKey, rawValue] of Object.entries(value)) {
+    if (typeof rawValue !== 'string') continue;
+    const key = safeString(rawKey, '', 48);
+    if (!key || key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    Object.defineProperty(output, key, {
+      value: safeString(rawValue, '', 96),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return output;
+}
+
+function forceZoneBounds(zone, cfg) {
+  const raw = zone?.bounds && typeof zone.bounds === 'object' ? zone.bounds : zone;
+  const width = radius(zone?.width, cfg);
+  const height = radius(zone?.height, cfg);
+  const fallbackX = coordinate(zone?.x, cfg);
+  const fallbackY = coordinate(zone?.y, cfg);
+  const rawLeft = coordinate(raw?.left, cfg, fallbackX - width * 0.5);
+  const rawRight = coordinate(raw?.right, cfg, fallbackX + width * 0.5);
+  const rawTop = coordinate(raw?.top, cfg, fallbackY - height * 0.5);
+  const rawBottom = coordinate(raw?.bottom, cfg, fallbackY + height * 0.5);
+  return {
+    left: Math.min(rawLeft, rawRight),
+    right: Math.max(rawLeft, rawRight),
+    top: Math.min(rawTop, rawBottom),
+    bottom: Math.max(rawTop, rawBottom),
+  };
+}
+
+function clippedArrow(center, acceleration, bounds) {
+  const dx = acceleration.x;
+  const dy = acceleration.y;
+  let scale = 1;
+  if (dx > 0) scale = Math.min(scale, (bounds.right - center.x) / dx);
+  else if (dx < 0) scale = Math.min(scale, (bounds.left - center.x) / dx);
+  if (dy > 0) scale = Math.min(scale, (bounds.bottom - center.y) / dy);
+  else if (dy < 0) scale = Math.min(scale, (bounds.top - center.y) / dy);
+  scale = clamp(finite(scale), 0, 1);
+  return {
+    x1: center.x,
+    y1: center.y,
+    x2: clamp(center.x + dx * scale, bounds.left, bounds.right),
+    y2: clamp(center.y + dy * scale, bounds.top, bounds.bottom),
+  };
+}
+
+function forceZoneProxy(forceZones, level, cfg) {
+  const runtime = sourceArray(forceZones?.zones);
+  const authored = sourceArray(level?.course?.forceZones);
+  const source = runtime.length ? runtime : authored;
+  const count = Math.min(source.length, cfg.maxForceZones);
+  const output = new Array(count);
+  for (let index = 0; index < count; index++) {
+    const zone = source[index] || {};
+    const bounds = forceZoneBounds(zone, cfg);
+    const center = {
+      x: (bounds.left + bounds.right) * 0.5,
+      y: (bounds.top + bounds.bottom) * 0.5,
+    };
+    const acceleration = {
+      x: coordinate(zone.acceleration?.x, cfg),
+      y: coordinate(zone.acceleration?.y, cfg),
+    };
+    output[index] = {
+      id: safeString(zone.id, `force-zone-${index}`),
+      active: zone.enabled !== false && zone.active !== false,
+      kind: safeString(zone.kind, 'field', 48),
+      bounds,
+      center,
+      acceleration,
+      angularAcceleration: coordinate(zone.angularAcceleration, cfg),
+      arrow: clippedArrow(center, acceleration, bounds),
+      render: detachedRenderStrings(zone.render),
+    };
+  }
+  return { output, source };
+}
+
 function checkpointProxy(run, level, cfg) {
   const authored = sourceArray(level?.course?.checkpoints);
   const source = authored.length ? authored : sourceArray(run?.cpList).slice(1);
@@ -319,6 +407,7 @@ export function buildDebugProxySnapshot(source = {}, options = {}) {
   const terrain = terrainProxy(source.terrain, cfg);
   const hazards = hazardProxy(source.run, source.level, cfg);
   const platforms = platformProxy(source.kinematicRun, cfg);
+  const forceZones = forceZoneProxy(source.forceZones, source.level, cfg);
   const checkpoints = checkpointProxy(source.run, source.level, cfg);
   const bike = bikeProxy(source.bike, cfg);
   return {
@@ -329,12 +418,14 @@ export function buildDebugProxySnapshot(source = {}, options = {}) {
       terrainSegments: truncateCount(terrain.source, terrain.output.length),
       hazards: truncateCount(hazards.source, hazards.output.length),
       platforms: truncateCount(platforms.source, platforms.output.length),
+      forceZones: truncateCount(forceZones.source, forceZones.output.length),
       checkpoints: truncateCount(checkpoints.source, checkpoints.output.length),
     },
     terrain: terrain.output,
     bike,
     hazards: hazards.output,
     platforms: platforms.output,
+    forceZones: forceZones.output,
     checkpoints: checkpoints.output,
     finish: finishProxy(source.level, source.bike, checkpoints.output, cfg),
   };

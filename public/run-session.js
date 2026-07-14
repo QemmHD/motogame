@@ -22,6 +22,7 @@ import {
   snapshotKinematicRun,
   stepKinematicRun,
 } from './kinematics.js';
+import { createForceZoneField, stepForceZones } from './force-zones.js';
 
 export const RUN_SESSION_STEP = 1 / 60;
 export const RUN_SESSION_CRASH_DURATION = 1.85;
@@ -87,6 +88,7 @@ function createStepEvents(target) {
     scores: [],
     explosions: [],
     impulses: [],
+    forceZones: [],
     nearMisses: [],
     platformContacts: [],
     platformActivations: [],
@@ -217,6 +219,7 @@ export function initializeRunSession(target, level, levelIndex = 0, options = {}
       : definition
   ));
   target.kinematics = createKinematicRun(runtimePlatformDefinitions);
+  target.forceZones = createForceZoneField(level.course.forceZones || []);
   target.bike = createBike(
     level.course.startX,
     level.course.startY + spawnOffsetY,
@@ -354,6 +357,15 @@ export function stepPlayingRun(target, rawInput, dt = RUN_SESSION_STEP) {
   for (const nearMiss of rules.nearMisses) {
     awardScore(target, events, 'nearMiss', 70, nearMiss.x, nearMiss.y - 40,
       { nearMiss: clonePlainEvent(nearMiss) });
+  }
+
+  // Kinetic Looms are stateless continuous fields. Rules resolve first so a
+  // lethal hazard or a crossed finish cannot receive a late field impulse.
+  // The resulting velocity change is consumed by the next fixed physics tick.
+  if (!rules.crash && !rules.finished && bike.y <= target.falloutY
+      && target.forceZones.zones.length > 0) {
+    const forceResult = stepForceZones(target.forceZones, bike, dt);
+    events.forceZones = forceResult.applications.map(clonePlainEvent);
   }
 
   if (rules.crash) bike.crashed = true;

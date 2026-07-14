@@ -2,6 +2,22 @@
 
 Every release-candidate gallery is kept in its own directory. These files are real browser captures of the repository runtime, not concept art.
 
+## v1.7.0 — Vector Weave
+
+<p align="center">
+  <img src="v1.7/update-v17-vector-weave-hero.png" alt="Vector Weave Loft Line gameplay" width="900">
+</p>
+
+| Collision-aligned Kinetic Looms | Reduced Motion |
+|:---:|:---:|
+| ![Exact Loom collision rectangles and arrows](v1.7/update-v17-collision-looms.png) | ![Static woven direction under Reduced Motion](v1.7/update-v17-reduced-motion.png) |
+
+<p align="center">
+  <img src="v1.7/update-v17-mobile-loom.png" alt="Flow Assist at 390 by 844 DPR 2" width="300">
+</p>
+
+See the [v1.7 capture record](v1.7/README.md) for fixed ticks, output sizes, method, review result, and evidence limits.
+
 ## v1.6.0 — Smooth Ride
 
 | Live desktop telemetry | Desktop completion pressure |

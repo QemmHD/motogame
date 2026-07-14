@@ -1,7 +1,7 @@
 {
   "name": "Moto Rush X3",
   "short_name": "MotoRushX3",
-  "description": "A physics motocross stunt racer — flip, send it, beat the clock.",
+  "description": "A momentum-driven motocross stunt racer with Kinetic Loom routes, moving machines, and verifiable Gold Runs.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

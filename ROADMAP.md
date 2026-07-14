@@ -12,7 +12,7 @@ Moto Rush X3 will become an original trail-racing anthology built around five id
 2. **Three-Lane Trails** — major set pieces aim to provide a forgiving route, a faster stunt line, and a discoverable Rush Route.
 3. **Bike-and-Rider Physicality** — suspension, tire contact, posture, engine load, landing quality, and crashes make the machine feel tangible.
 4. **Echo Competition** — personal-best ghosts, replay proofs, daily relays, and challenge links work without accounts or a game server.
-5. **Original Trail Anthology** — Canyon Run, Stormworks, the three-course R&D Yard, Frostline Relay, Sunspill Coast, and Stormworks Foundry each receive their own machinery, color story, silhouettes, props, and music.
+5. **Original Trail Anthology** — Canyon Run, Stormworks, the four-course R&D Yard, Frostline Relay, Sunspill Coast, and Stormworks Foundry each receive their own machinery, color story, silhouettes, props, and music.
 
 The game may learn from broad genre conventions, but no update may decompile a competitor or copy proprietary code, art, audio, UI layouts, exact tracks, or timing data. All implementation and content must be original.
 
@@ -37,7 +37,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
 
-**Current evidence:** The v1.6 gate contains 3 asset/offline subtests, 76 deterministic system subtests, a 15-level headless physics/rules route pass, 15 checked-in Gold proofs replayed twice (30 exact browser passes), and two repeatable browser-performance profiles. Local visual QA covers repository references, triggered ground, collision alignment, verified finish UI, responsive and rotated layouts, left-hand controls, and live performance telemetry without page errors. Production URL, installed/offline cache replacement, and physical-device smoke evidence must still be recorded for the candidate actually deployed.
+**Current evidence:** The v1.7 local gate contains 3 asset/offline subtests, 87 deterministic system subtests, a 16-level physics/rules route pass, 16 checked-in Gold proofs replayed twice (32 exact browser passes), and two repeatable browser-performance profiles. The original 15 Gold outcomes and authoritative state hashes remain identical outside their versioned tokens. Local visual QA covers repository references, triggered ground, collision/Loom alignment, verified finish UI, responsive and rotated layouts, left-hand controls, Reduced Motion, mobile Kinetic Loom play, and live performance telemetry without page errors. Production URL, installed/offline cache replacement, and physical-device smoke evidence must still be recorded for the candidate actually deployed.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -67,7 +67,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Current evidence:** The v1.6 Smooth Ride candidate satisfies the local gate with fixed hard bounds of 384 particle, 32 popup, and 220 track identities (636 total), deterministic oldest-active eviction, stale-lease protection, storage reuse, and allocation-free active iteration. Input ownership is extracted into a DOM-free state machine with 17 tests covering keyboard, multi-pointer, gamepad, development input, remapping, pointer cancel/lost capture, blur/hidden/rotation clearing, pause recommendations, bounded churn, and left-hand layout metadata. Steady gamepad polling reuses scratch state once per rendered frame and suppresses unchanged diagnostics. A typed-ring performance recorder has 6 tests for exact p50/p95/p99 statistics, catch-up/backlog/drop counters, viewport/DPR/rotation events, detached snapshots, reset reuse, and long bounded churn; the frame loop now exposes real post-budget backlog and bounded dropped time. The browser gate adds a harness-only bounded callback-work probe so hosted scheduler delays are reported without being misclassified as game workload. The recorded installed-Chrome full-gate reference measured main-loop work p95 of 1.00 ms at 1280 × 720 DPR 1 and 0.81 ms at 390 × 844 DPR 2, with diagnostic pacing p95 of 3.70 ms for both profiles, while also passing disjoint/unclipped 320 × 568 control geometry, simultaneous touch, cancel, blur, 844 × 390 rotation, and left-hand UI assertions. The fixed Gold proof gate still reproduces all 15 courses twice with `physics-3` and `course-3`; tokens were regenerated only because build compatibility advanced to `1.6.0`, not because authoritative simulation changed. Cached gradients, visible terrain slicing, scalar camera/ragdoll lookups, and reusable engine/UI/input/effect state remove the audited hot-path allocations. A physical low-end phone and the deployed production build remain required before making a universal device-performance claim.
 
-### U04 / v1.6 — Collision Keystone
+### U04 / v1.6–v1.7 — Collision Keystone
 
 **Status:** PARTIAL FOUNDATION
 
@@ -79,7 +79,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Fast-mover fixtures cannot tunnel; dormant features leave baseline runs unchanged; one-way terrain does not trap the bike; inherited platform speed is bounded; debug contacts align with rendered geometry.
 
-**Current evidence:** Solid platform tops pass high-speed swept crossing, ten-cycle carry, exact activated checkpoint restore, definition immutability, and bounded inheritance. A finite detached proxy builder and browser overlay now align terrain, bike sweeps, hazards, decks, checkpoints, and finish triggers with rendered art; the reviewed capture is stored under `docs/screenshots/v1.5/`. Force zones and general moving/closed chains remain open, so the collision keystone is not accepted as complete.
+**Current evidence:** Solid platform tops pass high-speed swept crossing, ten-cycle carry, exact activated checkpoint restore, definition immutability, and bounded inheritance. The v1.7 branch integrates DOM-free stateless Kinetic Loom force zones through the public impulse API, evaluates them after rules with crash/finish priority, and gives their exact rectangles and clipped direction arrows the same bounded detached proxy treatment as terrain, bike sweeps, hazards, decks, checkpoints, and finish triggers. Vector Weave teaches three original fields and expands the authored catalog to 16 routes. Nine focused force-zone tests cover validation, bounds, high-speed sweeps, overlap order, dormant/crashed behavior, detached records, atomic invalid impulses, and hard caps; the session gate proves all three live fields plus checkpoint re-entry. The complete 3/87/16/32/2 local gate passes, and inspected hero/debug/mobile/Reduced Motion captures live under `docs/screenshots/v1.7/`. General moving terrain, rotated/closed chains, and solid side/ceiling geometry remain open, so U04 stays partial rather than accepted.
 
 ## Phase II — Make every run satisfying
 
@@ -217,7 +217,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Twelve golden tapes; safe and risky routes manually verified; checkpoints precede lethal tests; three-star times derive from recorded rides; onboarding assumes no genre knowledge.
 
-**Current evidence:** The original 12 campaign courses remain headlessly completable and now each have a repeatedly verified repository recovery tape; three R&D Yard trials remain separate. This still does not satisfy U14: recorded human star derivation plus safe/risky-route, touch, and onboarding QA are missing.
+**Current evidence:** The original 12 campaign courses remain headlessly completable and now each have a repeatedly verified repository recovery tape; four R&D Yard trials remain separate. This still does not satisfy U14: recorded human star derivation plus safe/risky-route, touch, and onboarding QA are missing.
 
 ### U15 / v2.7 — Closed-Course Geometry
 
@@ -425,15 +425,15 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Immediate execution queue
 
-After the v1.6 Smooth Ride candidate reaches a stable final diff:
+After the v1.7 Vector Weave candidate reaches a stable final diff:
 
-1. Run and record the complete 3-asset / 76-system / 15-route / 30-Gold-replay / 2-browser-profile gate, promote only after review, and verify the production cache, install/offline path, and visible `v1.6.0` label.
+1. Run and record the complete asset / deterministic-system / 16-route / compatible-Gold / two-browser-profile gate, filling in exact counts only from the final command output. Promote only after review, then verify the production cache, install/offline path, and visible `v1.7.0` label.
 2. Repeat performance and interruption smoke on a deliberately low-end physical phone plus representative iOS/Android, keyboard, multitouch, and real-gamepad paths. Keep these results separate from the named local headless-Chrome measurements.
 3. Finish U02 with physical keyboard/touch/gamepad restart and results-flow parity, explicit reset ownership for remaining presentation subsystems, and additional renderer/audio/persistence extraction.
-4. Continue U04 with DOM-free force-zone contracts, deterministic/reset fixtures, proxy alignment, and dormant-baseline proof before authoring force-zone course content.
+4. Human-check the integrated Kinetic Loom recovery line on keyboard and touch, then continue U04 with broader moving terrain and rotated/closed solid chains while keeping their reset/proof contract explicit.
 5. Continue U10 only after that contract with broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
 6. Finish U05/U07 presentation acceptance with original rider-part polish, physical-browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
-7. Record human keyboard/touch references for all 15 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
+7. Record human keyboard/touch references for all 16 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
 8. Build PB Echoes and challenge links on the campaign-proven tape format, keeping version mismatch and storage pruning explicit.
 
 ## Update discipline

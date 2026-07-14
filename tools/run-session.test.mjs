@@ -43,6 +43,9 @@ function crashFixture() {
     chains: [[{ x: -240, y: 240 }, { x: 1_200, y: 240 }]],
     checkpoints: [{ x: 110, y: 240 }],
     hazards: [{ type: 'saw', id: 'retry-saw', x: 330, y: 190, r: 46 }],
+    forceZones: [{ id: 'retry-loom', kind: 'kinetic-loom', x: 230, y: 190,
+      width: 100, height: 140, acceleration: { x: 45, y: 0 },
+      angularAcceleration: 0, enabled: true, render: { model: 'kinetic-loom' } }],
     platforms: [{ id: 'retry-lift', x: 560, y: 130, width: 140, height: 20,
       startActive: false, triggerX: 80,
       motion: { kind: 'sine', axis: 'y', amplitude: 50, period: 2 } }],
@@ -57,15 +60,18 @@ function manualRetryScript(level) {
   initializeRunSession(target, level, 91);
   let crash = null;
   let activation = null;
+  let loomEntry = null;
   let checkpointPlatforms = null;
   for (let tick = 0; tick < 600 && target.state === 'playing'; tick++) {
     const events = stepPlayingRun(target, gas, DT);
     if (events.platformActivations.length) activation = events.platformActivations[0];
+    if (!loomEntry) loomEntry = events.forceZones.find(event => event.entered) || null;
     if (events.checkpoint) checkpointPlatforms = snapshotRunSession(target).platforms;
     if (events.crash) crash = events.crash;
   }
   assert.ok(crash, 'fixture never reached its crash');
   assert.ok(activation, 'fixture never activated its triggered platform');
+  assert.ok(loomEntry, 'fixture never entered its Kinetic Loom');
   assert.ok(checkpointPlatforms, 'fixture never captured platform checkpoint state');
   assert.equal(target.run.cpIndex, 1, 'fixture did not cross its checkpoint');
   const checkpointTick = target.run.checkpointSnapshot.tick;
@@ -74,7 +80,14 @@ function manualRetryScript(level) {
   assert.ok(retry.respawn, 'manual retry did not emit a respawn event');
   assert.deepEqual(snapshotRunSession(target).platforms, checkpointPlatforms,
     'checkpoint retry did not restore exact platform activation/motion state');
-  return { target, crash, activation, checkpointTick, checkpointPlatforms, retry };
+  let retryLoomEntry = null;
+  for (let tick = 0; tick < 180 && target.state === 'playing' && !retryLoomEntry; tick++) {
+    const events = stepPlayingRun(target, gas, DT);
+    retryLoomEntry = events.forceZones.find(event => event.entered) || null;
+  }
+  assert.ok(retryLoomEntry, 'checkpoint retry never re-entered its stateless Kinetic Loom');
+  return { target, crash, activation, loomEntry, retryLoomEntry,
+    checkpointTick, checkpointPlatforms, retry };
 }
 
 test('a clean Canyon Run completion produces an authoritative finish', () => {
@@ -89,6 +102,31 @@ test('a clean Canyon Run completion produces an authoritative finish', () => {
   assert.ok(target.finishStars >= 0 && target.finishStars <= 3);
 });
 
+test('Vector Weave completes through all three authoritative Kinetic Looms', () => {
+  const level = buildLevels()[15];
+  const target = {};
+  initializeRunSession(target, level, 15);
+  const touched = new Set();
+  const entered = new Set();
+  let crashes = 0;
+  for (let tick = 0; tick < 1_500 && target.state !== 'finished'; tick++) {
+    const events = target.state === 'playing'
+      ? stepPlayingRun(target, gas, DT)
+      : stepCrashedRun(target, { restart: false }, DT);
+    for (const zone of events.forceZones) {
+      touched.add(zone.id);
+      if (zone.entered) entered.add(zone.id);
+    }
+    if (events.crash) crashes++;
+  }
+  assert.equal(target.state, 'finished');
+  assert.equal(crashes, 0);
+  assert.deepEqual([...touched].sort(), ['weave-assist', 'weave-correction', 'weave-loft']);
+  assert.deepEqual([...entered].sort(), [...touched].sort());
+  assert.equal(level.course.hazards.length, 0);
+  assert.equal(level.course.checkpoints.length, 3);
+});
+
 test('crash timing and a manual retry reproduce the exact checkpoint state', () => {
   const level = crashFixture();
   const first = manualRetryScript(level);
@@ -96,6 +134,10 @@ test('crash timing and a manual retry reproduce the exact checkpoint state', () 
 
   assert.deepEqual(first.crash, second.crash);
   assert.deepEqual(first.activation, second.activation);
+  assert.deepEqual(first.loomEntry, second.loomEntry);
+  assert.deepEqual(first.retryLoomEntry, second.retryLoomEntry);
+  assert.equal(first.loomEntry.id, 'retry-loom');
+  assert.equal(first.loomEntry.impulse.x, 45 * DT);
   assert.deepEqual(first.retry, second.retry);
   assert.equal(first.retry.respawn.runTick, first.checkpointTick);
   assert.equal(first.retry.respawn.platformTick, first.checkpointTick);
@@ -157,15 +199,16 @@ test('the same input script repeats score events and the complete finish snapsho
 });
 
 test('session stepping and checkpoint restoration never mutate level definitions', () => {
-  const level = buildLevels()[12];
+  const level = buildLevels()[15];
   const authored = JSON.stringify({
     chains: level.course.chains,
     hazards: level.course.hazards,
     platforms: level.course.platforms,
+    forceZones: level.course.forceZones,
     checkpoints: level.course.checkpoints,
   });
   const target = {};
-  initializeRunSession(target, level, 12);
+  initializeRunSession(target, level, 15);
   for (let tick = 0; tick < 420 && target.state !== 'finished'; tick++) {
     if (target.state === 'playing') stepPlayingRun(target, tick % 90 < 80 ? gas : neutral, DT);
     else stepCrashedRun(target, { restart: tick % 11 === 0 }, DT);
@@ -174,6 +217,7 @@ test('session stepping and checkpoint restoration never mutate level definitions
     chains: level.course.chains,
     hazards: level.course.hazards,
     platforms: level.course.platforms,
+    forceZones: level.course.forceZones,
     checkpoints: level.course.checkpoints,
   }), authored);
 });

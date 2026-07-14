@@ -9,7 +9,7 @@
 
 import { resolveCircleOnPlatform } from './kinematics.js';
 
-export const PHYSICS_VERSION = 'physics-3';
+export const PHYSICS_VERSION = 'physics-4';
 
 export const CONFIG = {
   wheelBase: 80,      // axle-to-axle
@@ -470,11 +470,43 @@ export function resolveBikePlatforms(bike, kinematicRun, frameDt, input = null) 
   return contacts;
 }
 
+function validImpulseNode(node) {
+  return node && typeof node === 'object'
+    && Number.isFinite(node.x) && Number.isFinite(node.y)
+    && Number.isFinite(node.ox) && Number.isFinite(node.oy);
+}
+
 // Adds an instantaneous velocity change to the bike. This is the shared,
 // mode-safe hook used by launch pads, explosions, geysers, and moving props.
 export function applyImpulse(bike, ix, iy, angularImpulse = 0) {
-  if (!bike || bike.crashed) return;
-  const dt = bike._dt || (1 / 60 / bike.cfg.substeps);
+  if (!bike || typeof bike !== 'object' || Array.isArray(bike)) {
+    throw new TypeError('impulse bike must be an object');
+  }
+  if (!Number.isFinite(ix)) throw new RangeError('ix must be finite');
+  if (!Number.isFinite(iy)) throw new RangeError('iy must be finite');
+  if (!Number.isFinite(angularImpulse)) throw new RangeError('angularImpulse must be finite');
+  if (bike.crashed) return false;
+  const cfg = bike.cfg;
+  if (!cfg || typeof cfg !== 'object' || !Number.isFinite(cfg.substeps) || cfg.substeps <= 0
+      || !Number.isFinite(cfg.maxLinearSpeed) || cfg.maxLinearSpeed <= 0
+      || !Number.isFinite(cfg.maxFallSpeed) || cfg.maxFallSpeed <= 0
+      || !Number.isFinite(cfg.maxAirOmega) || cfg.maxAirOmega <= 0) {
+    throw new TypeError('impulse bike configuration is invalid');
+  }
+  const dt = bike._dt === undefined ? (1 / 60 / bike.cfg.substeps) : bike._dt;
+  if (!Number.isFinite(dt) || dt <= 0) throw new RangeError('impulse sample dt must be positive and finite');
+  if (!validImpulseNode(bike.rear)) throw new TypeError('impulse bike rear node is invalid');
+  if (!validImpulseNode(bike.front)) throw new TypeError('impulse bike front node is invalid');
+  if (!validImpulseNode(bike.head)) throw new TypeError('impulse bike head node is invalid');
+  if (bike.mode !== 'ground' && bike.mode !== 'air') {
+    throw new TypeError('impulse bike mode must be ground or air');
+  }
+  if (bike.mode === 'air'
+      && !(Number.isFinite(bike.mx) && Number.isFinite(bike.my)
+        && Number.isFinite(bike.mvx) && Number.isFinite(bike.mvy)
+        && Number.isFinite(bike.aAngle) && Number.isFinite(bike.aOmega))) {
+    throw new TypeError('impulse bike air state is invalid');
+  }
   if (bike.mode === 'air') {
     bike.mvx += ix; bike.mvy += iy;
     bike.mvx = clamp(bike.mvx, -bike.cfg.maxLinearSpeed, bike.cfg.maxLinearSpeed);
@@ -488,6 +520,7 @@ export function applyImpulse(bike, ix, iy, angularImpulse = 0) {
       capNodeVelocity(n, dt, bike.cfg.maxLinearSpeed);
     }
   }
+  return true;
 }
 
 export function bikePoints(b) {

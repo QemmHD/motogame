@@ -27,7 +27,7 @@ const ASSETS = {
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
 const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: CONFIG.wheelR, sag: 0.22, dip: 18 };
-const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.6-dev';
+const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.7-dev';
 const BUILD = globalThis.MOTO_RUSH_BUILD?.label || `v${BUILD_VERSION}`;
 const IMG = {};
 const GOLDEN_TAPES = new Map();
@@ -199,6 +199,7 @@ const Audio2 = (() => {
     flip() { blip(520, 0.16, 'square', 0.22, 900); },
     stunt() { blip(680, 0.12, 'triangle', 0.2, 1100); },
     checkpoint() { blip(600, 0.1, 'triangle', 0.28); setTimeout(() => blip(900, 0.14, 'triangle', 0.28), 90); },
+    loom() { blip(420, 0.16, 'triangle', 0.2, 880); setTimeout(() => blip(740, 0.1, 'sine', 0.16, 980), 70); },
     finish() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.22, 'triangle', 0.3), i * 110)); },
     toggle() { muted = !muted; save.muted = muted; persist(); if (master && ac) master.gain.setTargetAtTime(muted ? 0 : 0.9, ac.currentTime, 0.05); return muted; },
     get muted() { return muted; },
@@ -546,6 +547,13 @@ function simulate(dt) {
       addPopup('BLAST BOOST!', impulse.x, impulse.y - 56, '#ffb12b');
       shakeAdd(12); camKick(-6, -8); vib(24);
     }
+    for (const zone of events.forceZones) {
+      if (!zone.entered) continue;
+      addPopup(STR.vectorLock, zone.x, zone.y - zone.height * 0.5 - 24, '#8feaff');
+      Audio2.loom();
+      camKick(Math.sign(zone.acceleration.x) * 3, Math.sign(zone.acceleration.y) * 3);
+      vib(12);
+    }
     for (const _miss of events.nearMisses) Audio2.stunt();
     for (const activation of events.platformActivations) {
       const platform = G.kinematics.platforms.find(item => item.id === activation.id);
@@ -755,6 +763,7 @@ const DASH_SWEEP = Object.freeze([8, 6]);
 const DASH_PROXY = Object.freeze([6, 5]);
 const DASH_CHECKPOINT = Object.freeze([9, 7]);
 const DASH_FINISH = Object.freeze([10, 6]);
+const DASH_LOOM = Object.freeze([18, 12]);
 function makePatterns() {
   if (IMG.dirt) patDirt = ctx.createPattern(IMG.dirt, 'repeat');
   if (IMG.rock) patRock = ctx.createPattern(IMG.rock, 'repeat');
@@ -870,6 +879,84 @@ function drawTerrain(scale) {
     drawSurfaceBands(pts, i0, i1);
   }
 }
+
+const LOOM_PALETTES = Object.freeze({
+  cyan: Object.freeze({ field: 'rgba(60,205,255,0.105)', line: '#55d8ff', glow: '#bcefff' }),
+  magenta: Object.freeze({ field: 'rgba(255,116,208,0.10)', line: '#ff74d0', glow: '#ffd1ef' }),
+  amber: Object.freeze({ field: 'rgba(255,190,46,0.09)', line: '#ffbe2e', glow: '#fff0b0' }),
+});
+
+// Kinetic Looms are original non-solid path-weaving machines. Their animation
+// is tied to the authoritative fixed tick so screenshots and replays show the
+// same field phase; Reduced Motion keeps the woven chevrons static.
+function drawForceZones() {
+  const zones = G.forceZones?.zones || [];
+  for (const zone of zones) {
+    const bounds = zone.bounds || {
+      left: zone.x - zone.width * 0.5, right: zone.x + zone.width * 0.5,
+      top: zone.y - zone.height * 0.5, bottom: zone.y + zone.height * 0.5,
+    };
+    const palette = LOOM_PALETTES[zone.render?.palette] || LOOM_PALETTES.cyan;
+    const ax = zone.acceleration?.x || 0, ay = zone.acceleration?.y || 0;
+    const magnitude = Math.hypot(ax, ay) || 1;
+    const ux = ax / magnitude, uy = ay / magnitude;
+    const px = -uy, py = ux;
+    const diagonal = Math.hypot(zone.width, zone.height) + 80;
+    const span = Math.min(zone.width, zone.height) * 0.72;
+    const phase = reduced() ? 0.42 : ((G.run?.tick || 0) % 120) / 120;
+
+    ctx.save();
+    ctx.globalAlpha = zone.enabled === false ? 0.34 : 1;
+    ctx.fillStyle = palette.field; ctx.fillRect(bounds.left, bounds.top, zone.width, zone.height);
+    ctx.beginPath(); ctx.rect(bounds.left, bounds.top, zone.width, zone.height); ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let ribbon = 0; ribbon < 7; ribbon++) {
+      const offset = (ribbon / 6 - 0.5) * span;
+      const cx = zone.x + px * offset, cy = zone.y + py * offset;
+      ctx.strokeStyle = ribbon === 3 ? palette.glow : palette.line;
+      ctx.globalAlpha = ribbon === 3 ? 0.8 : 0.38;
+      ctx.lineWidth = ribbon === 3 ? 3 : 1.6;
+      ctx.setLineDash(DASH_LOOM);
+      ctx.lineDashOffset = reduced() ? -14 : -(phase * 30 + ribbon * 5);
+      ctx.beginPath();
+      ctx.moveTo(cx - ux * diagonal * 0.5, cy - uy * diagonal * 0.5);
+      ctx.lineTo(cx + ux * diagonal * 0.5, cy + uy * diagonal * 0.5);
+      ctx.stroke();
+      for (let arrow = 0; arrow < 3; arrow++) {
+        const along = ((arrow / 3 + phase + ribbon * 0.07) % 1 - 0.5) * diagonal;
+        const tipX = cx + ux * along, tipY = cy + uy * along;
+        ctx.setLineDash(DASH_NONE); ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - ux * 14 + px * 7, tipY - uy * 14 + py * 7);
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - ux * 14 - px * 7, tipY - uy * 14 - py * 7);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = zone.enabled === false ? 0.42 : 1;
+    ctx.strokeStyle = palette.line; ctx.lineWidth = 2; ctx.setLineDash(DASH_SENSOR);
+    ctx.strokeRect(bounds.left, bounds.top, zone.width, zone.height);
+    ctx.setLineDash(DASH_NONE);
+    // Compact steel loom heads keep the field readable as machinery without
+    // implying that the full translucent volume is a solid collider.
+    for (let head = 0; head < 2; head++) {
+      const x = (head === 0 ? bounds.left : bounds.right) - 8;
+      ctx.fillStyle = '#222b35'; ctx.strokeStyle = '#0e141b'; ctx.lineWidth = 3;
+      roundRect(x, bounds.bottom - 46, 16, 46, 4); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#3d4b59'; ctx.fillRect(x + 4, bounds.bottom - 40, 8, 28);
+      ctx.fillStyle = palette.glow; ctx.fillRect(x + 5, bounds.bottom - 35, 6, 12);
+      ctx.beginPath(); ctx.arc(x + 8, bounds.bottom - 7, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = palette.glow; ctx.font = '900 11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(zone.render?.label || 'VECTOR', zone.x, bounds.top - 9);
+    ctx.restore(); ctx.textAlign = 'left'; ctx.setLineDash(DASH_NONE);
+  }
+}
+
 function crashSparks(x, y) {
   dustBurst(x, y, 5);
   dirtClods(x, y, 7);
@@ -988,7 +1075,8 @@ function drawPlatforms() {
 
 function drawCollisionDebug() {
   const p = buildDebugProxySnapshot({
-    terrain: G.terrain, run: G.run, kinematicRun: G.kinematics, bike: G.bike, level: G.level,
+    terrain: G.terrain, run: G.run, kinematicRun: G.kinematics,
+    forceZones: G.forceZones, bike: G.bike, level: G.level,
   });
   G.debugProxy = p;
   const circle = (item, color, width = 2) => {
@@ -1021,6 +1109,21 @@ function drawCollisionDebug() {
     ctx.strokeStyle = platform.active ? '#b46cff' : '#55d8ff'; ctx.lineWidth = 3;
     ctx.strokeRect(cur.left, cur.top, cur.width, cur.height);
     ctx.beginPath(); ctx.moveTo(platform.sweep.x0, platform.sweep.y0); ctx.lineTo(platform.sweep.x1, platform.sweep.y1); ctx.stroke();
+  }
+  for (const zone of p.forceZones) {
+    ctx.strokeStyle = zone.active ? '#55d8ff' : '#79818b'; ctx.lineWidth = 3;
+    ctx.setLineDash(DASH_PROXY);
+    ctx.strokeRect(zone.bounds.left, zone.bounds.top,
+      zone.bounds.right - zone.bounds.left, zone.bounds.bottom - zone.bounds.top);
+    ctx.setLineDash(DASH_NONE); ctx.beginPath();
+    ctx.moveTo(zone.arrow.x1, zone.arrow.y1); ctx.lineTo(zone.arrow.x2, zone.arrow.y2); ctx.stroke();
+    const angle = Math.atan2(zone.arrow.y2 - zone.arrow.y1, zone.arrow.x2 - zone.arrow.x1);
+    ctx.beginPath(); ctx.moveTo(zone.arrow.x2, zone.arrow.y2);
+    ctx.lineTo(zone.arrow.x2 - Math.cos(angle - 0.48) * 14,
+      zone.arrow.y2 - Math.sin(angle - 0.48) * 14);
+    ctx.moveTo(zone.arrow.x2, zone.arrow.y2);
+    ctx.lineTo(zone.arrow.x2 - Math.cos(angle + 0.48) * 14,
+      zone.arrow.y2 - Math.sin(angle + 0.48) * 14); ctx.stroke();
   }
   for (const checkpoint of p.checkpoints) {
     ctx.strokeStyle = checkpoint.reached ? '#7d8794' : checkpoint.next ? '#55d8ff' : '#42637b';
@@ -1206,6 +1309,7 @@ function drawPopupEffect(popup) {
 
 function drawWorld(scale) {
   drawTerrain(scale);
+  drawForceZones();
   drawPlatforms();
   drawTracks();
   let checkpointNumber = 0;
@@ -1288,7 +1392,7 @@ function drawHUD() {
 }
 
 function drawCollisionLegend() {
-  const p = G.debugProxy, x = 14, y = 116, w = Math.min(260, cssW - 28), h = 112;
+  const p = G.debugProxy, x = 14, y = 116, w = Math.min(284, cssW - 28), h = 130;
   ctx.save();
   roundRect(x, y, w, h, 12); ctx.fillStyle = 'rgba(7,13,20,0.90)'; ctx.fill();
   ctx.strokeStyle = 'rgba(85,216,255,0.65)'; ctx.lineWidth = 2; ctx.stroke();
@@ -1297,11 +1401,13 @@ function drawCollisionLegend() {
   ctx.fillStyle = '#d9e7ef'; ctx.font = '700 11px ui-monospace, monospace';
   ctx.fillText(`TICK ${String(p.tick).padStart(5, '0')}  TERRAIN ${p.terrain.length}`, x + 12, y + 42);
   ctx.fillText(`BIKE 3  HAZARDS ${p.hazards.length}  DECKS ${p.platforms.length}`, x + 12, y + 59);
-  ctx.fillStyle = '#53ff91'; ctx.fillText('━ TERRAIN', x + 12, y + 80);
-  ctx.fillStyle = '#5be7ff'; ctx.fillText('○ BIKE', x + 97, y + 80);
-  ctx.fillStyle = '#ff5b3d'; ctx.fillText('○ HAZARD', x + 163, y + 80);
-  ctx.fillStyle = '#b46cff'; ctx.fillText('□ PLATFORM', x + 12, y + 99);
-  ctx.fillStyle = '#ffe052'; ctx.fillText('┊ TRIGGERS', x + 119, y + 99);
+  ctx.fillText(`LOOMS ${p.forceZones.length}  CHECKPOINTS ${p.checkpoints.length}`, x + 12, y + 76);
+  ctx.fillStyle = '#53ff91'; ctx.fillText('━ TERRAIN', x + 12, y + 97);
+  ctx.fillStyle = '#5be7ff'; ctx.fillText('○ BIKE', x + 97, y + 97);
+  ctx.fillStyle = '#ff5b3d'; ctx.fillText('○ HAZARD', x + 163, y + 97);
+  ctx.fillStyle = '#b46cff'; ctx.fillText('□ PLATFORM', x + 12, y + 116);
+  ctx.fillStyle = '#55d8ff'; ctx.fillText('□ LOOM', x + 119, y + 116);
+  ctx.fillStyle = '#ffe052'; ctx.fillText('┊ GOALS', x + 197, y + 116);
   ctx.restore();
 }
 

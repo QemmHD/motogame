@@ -9,39 +9,47 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Item | Current value |
 |---|---|
 | Product | Moto Rush X3 |
-| Candidate | `1.6.0` — Smooth Ride |
+| Candidate | `1.7.0` — Vector Weave |
 | Runtime source of truth | `public/version.js` |
-| Package version | `1.6.0` |
-| Replay identity | schema `1`; physics `physics-3`; course `course-3` |
-| Working branch | `agent/motorush-30-update-foundation` |
+| Package version | `1.7.0` |
+| Replay identity | schema `1`; physics `physics-4`; course `course-4` |
+| Working branch | `agent/motorush-v17-collision-keystone` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
-| Draft pull request | `#1` — branch review/promotion vehicle |
-| Candidate delivery state | `v1.6.0` is on the feature branch and draft PR `#1`; its complete Actions test job passes, but it is not production |
+| Draft pull request | v1.7 draft pending; v1.6 predecessor remains preserved in `#1` |
+| Candidate delivery state | `v1.7.0` passes its complete local gate and visual review on the collision-keystone branch; it is not production |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
 
-The v1.6 release candidate is tracked on the feature branch and draft PR; its exact head can advance independently of this durable handoff note. Use `git rev-parse HEAD`, `git status -sb`, and the draft PR for current coordinates. A pushed feature branch is still not production: do not describe v1.6 as live until review, promotion to `main`, a successful GitHub Pages run, and canonical URL/cache/offline smoke are recorded.
+The v1.7 release candidate is tracked separately from the preserved v1.6 draft PR. Use `git rev-parse HEAD`, `git status -sb`, and the eventual v1.7 draft PR for current coordinates. A pushed feature branch is still not production: do not describe v1.7 as live until review, promotion to `main`, a successful GitHub Pages run, and canonical URL/cache/offline smoke are recorded.
 
-The build-version field is part of replay compatibility. Repository Gold tokens were therefore regenerated for `1.6.0`, but authoritative simulation identities remain `physics-3` and `course-3`; Smooth Ride did not intentionally change bike, rules, hazard, platform, scoring, or course behavior.
+The build-version field is part of replay compatibility. Repository Gold tokens were intentionally regenerated for `1.7.0` / `physics-4` / `course-4` because Kinetic Looms add authoritative acceleration and Vector Weave changes the catalog. Levels 1–15 retain identical finish outcomes and final state hashes outside their version-bearing tokens.
 
 ## Current playable catalog
 
-The candidate contains **15 handcrafted levels across three worlds**:
+The candidate contains **16 handcrafted levels across three worlds**:
 
 - **Canyon Run, L1–L6:** Warm-Up, Air Time, Whoops & Woes, Danger Zone, Cliffhanger, Grand Finale.
 - **Stormworks, L7–L12:** Boostline, Pendulum Pass, Cold Circuit, Blast Foundry, Piston Works, Stormbreak.
-- **R&D Yard, L13–L15:** Freight Flight, Lift Logic, Proof Circuit.
+- **R&D Yard, L13–L16:** Freight Flight, Lift Logic, Proof Circuit, Vector Weave.
 
-R&D Yard remains a focused mechanics lab rather than a full six-course world. Lift Logic teaches the first sensor-triggered moving deck, with a recoverable lower trail. Progression persists unlocks, stars, best time, best score, settings, and the player's latest completed proof per level. Every current course also has a read-only repository Gold Run loaded from `public/golden-tapes.json`.
+R&D Yard remains a focused mechanics lab rather than a full six-course world. Lift Logic teaches the first sensor-triggered moving deck; Vector Weave teaches Flow Assist, Loft Line, and Soft Landing Kinetic Looms over a recoverable lower trail. Progression persists unlocks, stars, best time, best score, settings, and the player's latest completed proof per level. Every current course also has a read-only repository Gold Run loaded from `public/golden-tapes.json`.
 
-## v1.6 integrated architecture
+## v1.7 integrated architecture
 
-### Authoritative run session remains stable
+### Authoritative run session extends deliberately
 
-`public/run-session.js` is still the DOM-free authority for terrain/bike creation, rules and kinematic state, fixed playing/crashed steps, scoring, checkpoints, crash/fallout/respawn/finish transitions, and proof-ready snapshots. Browser performance, input telemetry, particles, camera, audio, UI, and ragdoll presentation remain outside the proof hash.
+`public/run-session.js` remains the DOM-free authority for terrain/bike creation, rules, kinematic state, fixed playing/crashed steps, scoring, checkpoints, crash/fallout/respawn/finish transitions, force-field application, and proof-ready snapshots. Browser performance, input telemetry, particles, camera, audio, UI, and ragdoll presentation remain outside the proof hash.
 
-Smooth Ride changes presentation ownership and instrumentation around this session. It does not change the `1 / 60` fixed-step order protected by the 15 Gold Runs.
+Kinetic Looms enter the fixed `1 / 60` order after terrain/platform solving and rules/TNT. A lethal crash or valid finish wins before field application, and the field velocity affects the next physics tick. That intentional authority change is versioned as `physics-4` / `course-4`; every checked-in tape matches those identities.
+
+### Stateless Kinetic Loom authority
+
+`public/force-zones.js` clones, validates, freezes, and stably orders axis-aligned field definitions. Rear, front, and head circles sweep from the complete previous frame to current geometry using exact circle-to-rectangle distance, so a thin field cannot be skipped and square-expanded corner false positives are rejected. Each field contributes at most once per tick. Overlaps sum in stable ID order and call `applyImpulse()` once, preserving bounded order-independent results.
+
+Fields carry no timers, cooldowns, occupancy tables, or switch memory. Entry/exit/swept metadata is derived from geometry every step, so checkpoint retry needs no hidden Loom snapshot. The shared impulse hook now rejects malformed/non-finite input atomically, returns explicit success/no-op status, and retains ground/air speed and spin clamps.
+
+The Canvas renders fixed-tick woven ribbons, directional chevrons, compact steel heads, and labels. Reduced Motion freezes the weave phase. The collision overlay consumes detached bounded proxies with exact rectangles and clipped acceleration arrows; it never re-runs contact authority.
 
 ### Bounded effect ownership
 
@@ -98,11 +106,11 @@ The rendering audit also removed avoidable allocations and excess work from the 
 | Profile | Local frame-work p95 | Diagnostic pacing p95 | Work budget | Result |
 |---|---:|---:|---:|---|
 | 1280 × 720, DPR 1, desktop | 1.00 ms | 3.70 ms | 8 ms | Pass |
-| 390 × 844, DPR 2, mobile/touch emulation | 0.81 ms | 3.70 ms | 12 ms | Pass |
+| 390 × 844, DPR 2, mobile/touch emulation | 2.20 ms | 3.70 ms | 12 ms | Pass |
 
 Both observed main-thread work p95 values are below the roadmap's 16.7 ms target. Pacing remains visible as a separate diagnostic because headless scheduling is not portable across hosts. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state.
 
-GitHub Actions run `29304809481` independently passed the complete release gate with 181 work samples per profile. Its work p95 was 1.10 ms desktop and 1.20 ms mobile; pacing p95 was 66.70 ms and 100.00 ms, demonstrating why shared-runner scheduling remains diagnostic while synchronous game work is the regression metric.
+The table records the final v1.7 local full-gate run: 360 work samples per profile, 80 fixed ticks and 67/636 peak effects on desktop, plus 77 fixed ticks and 70/636 peak effects on mobile. Hosted v1.7 evidence is still pending publication of the draft branch. Preserved v1.6 Actions run `29304809481` remains predecessor evidence, not evidence for this candidate.
 
 ## Repository Gold Run evidence
 
@@ -110,13 +118,13 @@ Manifest: `public/golden-tapes.json`
 
 | Measure | Current result |
 |---|---|
-| Catalog coverage | 15 of 15 current levels |
+| Catalog coverage | 16 of 16 current levels |
 | Route classification | `recovery` |
 | Browser attempts per tape | 2 clean contexts |
-| Total verified replays | 30 |
+| Total verified replays | 32 |
 | Divergences | 0 |
-| Compatibility | build `1.6.0`; schema `1`; `physics-3`; `course-3` |
-| Authoritative reason for regeneration | None; build compatibility only |
+| Compatibility | build `1.7.0`; schema `1`; `physics-4`; `course-4` |
+| Authoritative reason for regeneration | Kinetic Loom authority plus the Vector Weave catalog addition |
 
 The full course table and regeneration policy remain in `docs/qa/GOLDEN_TAPES.md`. These are deterministic automation references, not clean-human, safe/apex, star-target, or personal-best claims.
 
@@ -142,9 +150,9 @@ npm run test:browser-performance
 Current expected coverage:
 
 - **Asset/offline:** 3 subtests.
-- **Deterministic systems:** 76 subtests—44 existing rules/replay/kinematics/ragdoll/session/proxy tests, 9 effect-pool tests, 17 input-state tests, and 6 performance-metrics tests.
-- **Physics/routes:** 15 of 15 authored levels.
-- **Browser Gold Runs:** 15 tapes × 2 attempts = 30 verified replays.
+- **Deterministic systems:** 87 subtests, including 9 dedicated force-zone cases and the Vector Weave session/proxy fixtures.
+- **Physics/routes:** 16 of 16 authored levels.
+- **Browser Gold Runs:** 16 tapes × 2 attempts = 32 verified replays.
 - **Browser profiles:** 2 measured profiles plus the mobile interruption/rotation/left-hand matrix.
 
 Focused commands:
@@ -159,6 +167,7 @@ npm run test:replay
 npm run test:kinematics
 npm run test:ragdoll
 npm run test:session
+npm run test:force-zones
 npm run test:debug
 npm run test:goldens
 ```
@@ -174,7 +183,14 @@ Inspect every manifest diff. A build-only regeneration must not be described as 
 
 ## Visual evidence
 
-Latest performance, input, and responsive QA captures live under `docs/screenshots/v1.6/`:
+Latest Vector Weave gameplay and collision QA captures live under `docs/screenshots/v1.7/`:
+
+- `update-v17-vector-weave-hero.png` — full desktop ride inside the magenta Loft Line.
+- `update-v17-collision-looms.png` — exact collision rectangles and clipped vectors over all three Looms.
+- `update-v17-mobile-loom.png` — 390 × 844 DPR 2 mobile ride with disjoint touch controls.
+- `update-v17-reduced-motion.png` — static Loom phase with Reduced Motion enabled.
+
+The v1.6 Smooth Ride gallery remains preserved under `docs/screenshots/v1.6/`:
 
 - `update-v16-performance-desktop.png` — desktop Smooth Ride performance overlay.
 - `update-v16-performance-mobile.png` — 390 × 844 DPR 2 mobile profile.
@@ -189,15 +205,15 @@ The v1.5 Gold/reference/collision gallery and v1.4 gallery remain preserved unde
 
 ## Roadmap acceptance state
 
-| Update | Status after v1.6 | Evidence | Still open |
+| Update | Status after v1.7 | Evidence | Still open |
 |---|---|---|---|
-| U01 Release Gate | Release candidate | 3 assets, 76 systems, 15 routes, 30 Gold passes, 2 browser profiles | Eligible deploy and production cache/install/offline smoke |
+| U01 Release Gate | Release candidate | 3 assets, 87 systems, 16 routes, 32 Gold passes, 2 browser profiles | Eligible deploy and production cache/install/offline smoke |
 | U02 Restart Contract | Partial foundation | Shared DOM-free session, 50-repeat rules restore, exact hazard/platform snapshots, extracted ride input | Physical keyboard/touch/gamepad results/restart matrix and further module splits |
 | U03 Smooth Ride | Release candidate | Hard-bounded 384/32/220 pools, typed-ring metrics, 17 input tests, 6 metric tests, 2-profile p95, cancel/blur/rotation/left-hand matrix | Physical low-end phone and production-profile confirmation |
-| U04 Collision Keystone | Partial foundation | Swept platforms/hazards, proxy builder, aligned browser overlay | Force zones and general moving/closed chains |
+| U04 Collision Keystone | Partial foundation | Swept platforms/hazards, stateless swept Kinetic Looms, bounded proxies, aligned browser overlay, retry fixtures | General moving/rotating/two-sided closed chains |
 | U05 Crash Theater | Playable preview | Deterministic finite ragdoll, static reduced-motion pose, optimized renderer | Final authored part art and physical-device crash matrix |
 | U07 Engine Soul | Playable preview | Landing grades, momentum retention, five gear bands, reactive audio | Wheelie meter, tire/surface layers, measured envelopes/audio budget |
-| U09 Proof Replays | Release candidate | 15 build-compatible tapes, 30 exact browser passes, explicit mismatch UI | Human route classes remain U10/U14 work |
+| U09 Proof Replays | Release candidate | 16 build-compatible tapes, 32 exact browser passes, explicit mismatch UI | Human route classes remain U10/U14 work |
 | U10 Moving Ground | Playable preview | Ten-cycle carry, bounded inheritance, triggered lift, exact restore, proxy audit | Broader/rotating geometry, dedicated framing, human safe/apex tapes |
 | U14 Campaign | Playable preview | 12 campaign routes headlessly complete and repository-proofed | Human safe/risky/touch/onboarding QA and star derivation |
 | U27 Accessibility | Playable preview | Responsive touch, 320 × 568 disjoint-target assertion, haptics, audio sliders, reduced motion, left-hand mode, rotation smoke | High contrast, full remapping UI, safe-area and physical-device matrix |
@@ -210,18 +226,18 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 - **Physical performance:** no deliberately low-end phone has repeated the p95 capture. Headless Chrome on the development host does not reproduce thermals, browser chrome, GPU/driver, installed-PWA, or service-worker costs.
 - **Input devices:** module tests cover gamepad snapshots, but a physical controller and a representative mobile multitouch set still need end-to-end production smoke.
 - **Human calibration:** automated route completion does not prove fun, readability, touch difficulty, or fair star times.
-- **Moving geometry:** platforms remain axis-aligned top-only rectangles. Force zones, arbitrary splines, rotation, two-sided closed chains, and breakable ground are not complete.
+- **Moving geometry:** platforms remain axis-aligned top-only rectangles. Arbitrary splines, rotation, two-sided closed chains, and breakable ground are not complete.
 - **Competition:** no PB tape library, translucent ghost, splits, daily relay, URL challenge UX, or pruning.
 - **Audio/feel:** wheelie balance, tire/surface loops, simultaneous-level budget, and measured landing envelopes remain open.
 - **Browser controller size:** input and effect ownership are extracted, but `game.js` still owns audio, persistence, presentation composition, UI, rendering, and loop orchestration.
 
 ## Immediate next priorities
 
-1. Review draft PR `#1`, confirm its eight-image gallery and exact 3/76/15/30/2 gate, inspect the final diff, and preserve the currently passing GitHub Actions test job.
-2. Promote only after review; verify visible `v1.6.0`, eligible Pages workflow, cache replacement, installability, and offline reload on the canonical URL.
+1. Publish and review the separate v1.7 draft PR, confirm its four-image Vector Weave gallery and exact 3/87/16/32/2 gate, inspect the final diff, and preserve the hosted Actions result.
+2. Promote only after review; verify visible `v1.7.0`, eligible Pages workflow, cache replacement, installability, and offline reload on the canonical URL.
 3. Repeat the interruption and performance matrix on representative physical devices: low-end Android, iOS Safari if available, keyboard desktop, multitouch, and a real gamepad. Preserve measurements, screenshots, and console results.
-4. Continue U04 with a DOM-free force-zone contract, deterministic fixtures, debug proxies, reset/checkpoint behavior, and unchanged-baseline tests before adding course content.
-5. Add broader moving or closed collision geometry only after force zones and their proof/version implications are explicit.
+4. Continue U04 with broader moving/rotating or closed collision chains, keeping their proof/version and reset implications explicit.
+5. Human-tune Vector Weave's three Loom envelopes and star targets on keyboard and touch without replacing the deterministic recovery reference.
 6. Record human safe/apex runs separately from recovery references; use human keyboard/touch rides—not automation recovery timing—to derive star targets.
 7. Keep extracting audio, persistence, renderer, and UI ownership from `game.js` without changing fixed-step ordering or silently invalidating Gold proofs.
 
@@ -240,6 +256,9 @@ Useful routes:
 - `http://127.0.0.1:8080/?dev&performance&level=14&touch`
 - `http://127.0.0.1:8080/?dev&level=14&debug=collisions`
 - `http://127.0.0.1:8080/?dev&level=15&autoplay`
+- `http://127.0.0.1:8080/?dev&level=16&autoplay`
+- `http://127.0.0.1:8080/?dev&level=16&autoplay&debug=collisions`
+- `http://127.0.0.1:8080/?dev&level=16&autoplay&touch`
 - `http://127.0.0.1:8080/?dev&touch`
 
 ## Handoff discipline

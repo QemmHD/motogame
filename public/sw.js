@@ -12,6 +12,7 @@ const PRECACHE = Object.freeze([
   './rules.js',
   './replay.js',
   './kinematics.js',
+  './force-zones.js',
   './ragdoll.js',
   './debug-proxies.js',
   './run-session.js',

@@ -1,6 +1,6 @@
 # Performance and Interruption QA
 
-This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** runtime work. It separates what the automated browser gate proves from what still requires physical-device testing.
+This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** foundation and its v1.7.0 **Vector Weave** regression pass. It separates what the automated browser gate proves from what still requires physical-device testing.
 
 ## Acceptance profiles
 
@@ -11,16 +11,18 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 
 The recorded full-gate reference run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
 
-## Recorded local reference result
+## Latest recorded local reference — v1.7.0
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 1.00 ms | 3.38 ms | 3.70 ms | p95 < 8 ms | Pass |
-| Mobile 390 × 844 @2 | 360 frames | 0.40 ms | 0.81 ms | 2.44 ms | 3.70 ms | p95 < 12 ms | Pass |
+| Desktop 1280 × 720 @1 | 360 frames | 0.30 ms | 1.00 ms | 3.68 ms | 3.70 ms | p95 < 8 ms | Pass |
+| Mobile 390 × 844 @2 | 360 frames | 0.40 ms | 2.20 ms | 2.92 ms | 3.70 ms | p95 < 12 ms | Pass |
 
 Both callback-work p95 measurements are below their repository budgets. `Work` is the synchronous duration of the game's animation-frame callback, including fixed-step updates, presentation updates, and canvas command submission. `Pacing` is the existing runtime's callback-to-callback wall interval; it remains visible as a diagnostic but is not gated on shared CI because host scheduling dominates it. Neither view is a universal performance guarantee or a physical-display FPS/GPU claim.
 
-### Hosted Actions confirmation
+The table above is the final v1.7 local `npm test` run in Chrome 150. It includes the new Kinetic Loom module, renderer, Vector Weave course, and 16-route catalog.
+
+### Hosted Actions confirmation for the v1.6 predecessor
 
 [GitHub Actions run 29304809481](https://github.com/QemmHD/motogame/actions/runs/29304809481) passed the same gate in Chrome 150 on the hosted Ubuntu runner:
 
@@ -29,7 +31,7 @@ Both callback-work p95 measurements are below their repository budgets. `Work` i
 | Desktop 1280 × 720 @1 | 181 | 0.80 ms | 1.10 ms | 1.22 ms | 2.60 ms | 66.70 ms | Pass |
 | Mobile 390 × 844 @2 | 181 | 0.70 ms | 1.20 ms | 1.48 ms | 3.00 ms | 100.00 ms | Pass |
 
-The work measurements remain close to the local reference while pacing differs sharply, which is the expected signature of shared-host scheduling rather than a hidden 50-100 ms game callback.
+The v1.6 work measurements remained close to its local reference while pacing differed sharply, which is the expected signature of shared-host scheduling rather than a hidden 50-100 ms game callback. A v1.7 hosted run remains pending until this branch is pushed and its draft pull request workflow completes; the local v1.7 figures must not be mislabeled as hosted evidence.
 
 ## Browser harness procedure
 

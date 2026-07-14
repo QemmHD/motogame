@@ -8,7 +8,7 @@
 
 const STEP = 10;
 
-export const COURSE_VERSION = 'course-3';
+export const COURSE_VERSION = 'course-4';
 
 export class Course {
   constructor(startX, startY) {
@@ -17,7 +17,7 @@ export class Course {
     this.ground = [{ x: startX - 240, y: startY }, { x: startX, y: startY }];
     this.chains = [this.ground];
     this.render = [{ type: 'ground', pts: this.ground }];
-    this.hazards = []; this.platforms = []; this.checkpoints = []; this.decos = [];
+    this.hazards = []; this.platforms = []; this.forceZones = []; this.checkpoints = []; this.decos = [];
     this.finishX = null; this.finishPt = null;
     this.minY = startY; this.maxY = startY;
     this._surface = 'dirt'; this._surfaceStrength = 1;
@@ -107,6 +107,31 @@ export class Course {
       triggerX: opts.triggerX ?? (opts.triggerDx == null ? null : this.x + opts.triggerDx),
       surface: opts.surface || 'metal', motion: opts.motion || { kind: 'static' },
       render: { model: opts.model || 'freight', warningStripe: opts.warningStripe !== false } });
+    return this;
+  }
+  forceZone(dx = 0, dy = -90, opts = {}) {
+    const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
+    const acceleration = opts.acceleration && typeof opts.acceleration === 'object'
+      ? opts.acceleration : {};
+    this.forceZones.push({
+      id: String(opts.id || `kinetic-loom-${this.forceZones.length}`),
+      kind: 'kinetic-loom',
+      x: this.x + finite(dx, 0),
+      y: this.y + finite(dy, -90),
+      width: Math.max(1, finite(opts.width, 220)),
+      height: Math.max(1, finite(opts.height, 120)),
+      acceleration: {
+        x: finite(acceleration.x, 0),
+        y: finite(acceleration.y, 0),
+      },
+      angularAcceleration: finite(opts.angularAcceleration, 0),
+      enabled: opts.enabled !== false,
+      render: {
+        model: 'kinetic-loom',
+        palette: String(opts.palette || 'cyan'),
+        label: String(opts.label || 'KINETIC LOOM'),
+      },
+    });
     return this;
   }
   deco(type, opts = {}) { this.decos.push({ type, x: this.x + (opts.dx || 0), y: this.y + (opts.dy || 0) }); return this; }
@@ -368,8 +393,26 @@ function level15() { // Proof Circuit: a compact replay-friendly mixed-mechanic 
   return { name: 'Proof Circuit', world: 'R&D Yard', course: c, star: [24, 35, 50] };
 }
 
+function level16() { // Vector Weave: three readable force fields over a forgiving service road
+  const c = new Course(180, 320);
+  c.flat(260).checkpoint()
+    .forceZone(160, -70, { id: 'weave-assist', width: 250, height: 110,
+      acceleration: { x: 480, y: 0 }, palette: 'cyan', label: 'FLOW ASSIST' });
+  c.flat(420).hill(280, 58)
+    .forceZone(-110, -160, { id: 'weave-loft', width: 180, height: 120,
+      acceleration: { x: 170, y: -820 }, palette: 'magenta', label: 'LOFT LINE' })
+    .platform(320, -170, { id: 'weave-sky-deck', width: 180, height: 22,
+      motion: { kind: 'static' }, model: 'sensor-lift' })
+    .flat(360).checkpoint();
+  c.forceZone(260, -55, { id: 'weave-correction', width: 220, height: 150,
+    acceleration: { x: 60, y: -360 }, palette: 'amber', label: 'SOFT LANDING' })
+    .dip(320, 34).flat(160).checkpoint();
+  c.whoops(3, 150, 20).flat(220).hill(280, 50).flat(180).finish();
+  return { name: 'Vector Weave', world: 'R&D Yard', course: c, star: [18, 27, 40] };
+}
+
 export function buildLevels() {
   return [level1(), level2(), level3(), level4(), level5(), level6(),
     level7(), level8(), level9(), level10(), level11(), level12(),
-    level13(), level14(), level15()];
+    level13(), level14(), level15(), level16()];
 }
