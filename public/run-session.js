@@ -104,12 +104,15 @@ function finishEvents(target, events) {
   return events;
 }
 
-function starsForLevel(level, time) {
-  const stars = level.star;
-  if (!Array.isArray(stars) || stars.length < 3) return 0;
-  if (time <= stars[0]) return 3;
-  if (time <= stars[1]) return 2;
-  if (time <= stars[2]) return 1;
+export function starsForLevel(level, time) {
+  const stars = level?.star;
+  if (!Array.isArray(stars) || stars.length < 3 || !Number.isFinite(time) || time < 0) return 0;
+  const thresholds = stars.slice(0, 3).map(Number);
+  if (!thresholds.every(value => Number.isFinite(value) && value >= 0)
+      || thresholds[0] > thresholds[1] || thresholds[1] > thresholds[2]) return 0;
+  if (time <= thresholds[0]) return 3;
+  if (time <= thresholds[1]) return 2;
+  if (time <= thresholds[2]) return 1;
   return 0;
 }
 

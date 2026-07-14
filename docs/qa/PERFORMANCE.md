@@ -1,6 +1,6 @@
 # Performance and Interruption QA
 
-This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** foundation, the v1.7.0 **Vector Weave** regression pass, and the v1.8.0 **Crash Theater** candidate. It separates what the automated browser gates prove from what still requires physical-device testing.
+This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** foundation, v1.7.0 **Vector Weave**, v1.8.0 **Crash Theater**, and the current v1.8.1 **Fast Failure, Great Finish** candidate. It separates what the automated browser gates prove from what still requires physical-device testing.
 
 ## Acceptance profiles
 
@@ -11,7 +11,45 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 
 The recorded full-gate reference run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
 
-## Latest recorded local reference — v1.8.0
+## Latest recorded local reference — v1.8.1
+
+The final ordinary-play regression run on 2026-07-14 passed both existing profiles:
+
+| Profile | Work p95 | Budget | Status |
+|---|---:|---:|---|
+| Desktop 1280 × 720 @1 | 1.10 ms | p95 < 8 ms | Pass |
+| Mobile 390 × 844 @2 | 0.90 ms | p95 < 12 ms | Pass |
+
+The mobile profile also retained the existing interruption, rotation, 320 × 568 geometry, simultaneous-pointer, and left-hand-control assertions.
+
+### Finish Forge result-flow profiles — v1.8.1
+
+`npm run test:browser-results` stages an exact authoritative Finish Forge receipt in clean service-worker-blocked contexts, measures the live result screen, and then exercises input, route, semantic, Reduced Motion, and reset behavior:
+
+| Profile | Semantic actions | Enabled Canvas targets | Work samples | Work p95 | Budget | Additional interaction coverage | Status |
+|---|---:|---:|---:|---:|---:|---|---|
+| Desktop 1280 × 720 @1 | 5 | 5, each ≥ 44 px | 123 | 0.70 ms | p95 < 8 ms | Native semantic Tab/Enter, held-repeat suppression, keyboard shortcuts, plus standard fake-gamepad D-pad/stick/A/B navigation, confirm, back, and held-A suppression | Pass |
+| Mobile 390 × 844 @2 | 5 | 5, each ≥ 44 px | 127 | 0.60 ms | p95 < 12 ms | Native semantic keyboard route, 320 × 568 five-target containment/non-overlap, and real touch-center Retry | Pass |
+
+Both profiles require canonical report and semantic text, matching action/disabled state, safe missing proof and locked/missing Next handling, clean transition reset, and zero page, console, request, or HTTP errors. The desktop profile additionally requires Reduced Motion to reveal timer state `10` immediately with no pooled effects, shake, flash, hitstop, or slow-motion residue.
+
+### Crash Theater regression profiles — v1.8.1
+
+`npm run test:browser-crash` proves the v1.8.1 result/reset integration did not regress the preserved failure presentation:
+
+| Profile | Parts | Pose ticks | Raw contacts | Frozen review | Work samples | Work p95 | Budget | Retry | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Desktop 1280 × 720 @1, TNT | 17 | 177 | 1,894 | 112 ticks | final profile | 3.10 ms | p95 < 8 ms | Clean | Pass |
+| Mobile 390 × 844 @2, saw | 17 | 168 | 1,287 | 112 ticks | final profile | 1.70 ms | p95 < 12 ms | Clean | Pass |
+| Desktop 1280 × 720 @1, Reduced Motion crusher | 17 | 0 | 0 | 112 ticks | — | not timed | static invariant | Clean | Pass |
+
+### Hosted Actions confirmation — v1.8.1
+
+`pending`: record the draft pull request, gameplay SHA, hosted profile outputs, full-gate result, and skipped publish job after the branch is pushed. The local numbers above are not hosted or production evidence.
+
+The final local aggregate `npm test` completed in **334.1 seconds** and passed 3 asset checks, 127 deterministic systems, all 16 routes, 32 Gold replays, both ordinary profiles, all three crash profiles, and both Finish Forge profiles.
+
+## Preserved local reference — v1.8.0
 
 The final aggregate `npm test` run on 2026-07-14 used Chrome 150.0.7871.102 and passed both ordinary profiles:
 
@@ -103,12 +141,15 @@ Both hosted runs keep synchronous work close to their local references while pac
 
 The dedicated crash harness starts the same temporary deployment boundary with service workers blocked, then runs desktop TNT, mobile DPR 2 saw, and Reduced Motion crusher profiles. It stages each cause through development-only deterministic hooks after 28 presentation ticks. For measurement only, it raises the harness copy of the crash timer to 35 seconds so a slow runner can collect at least 180 unfrozen callbacks through the real crashed-session/ragdoll/contact/effect/camera path; collection may wait up to 30 seconds and reports the partial count on timeout, while the strict 8/12 ms callback-work budgets do not change. The production `1.85` second retry boundary is unchanged and covered separately. It requires session and dynamic pose progress, validates the 17-part rig and visible card, then freezes and compares an exact review state for 112 tick-equivalent intervals, retries, and rejects page, console, network, HTTP, camera, pose, effect-bound, or reset errors.
 
+The Finish Forge harness uses the same two acceptance viewports and work budgets. It injects a bounded callback-work probe and standard fake gamepad before navigation, stages a canonical finish, requires at least 120 live callback samples, and checks the rendered receipt against the semantic dialog and authoritative report. It then exercises keyboard Retry, disabled Replay, locked and missing Next, standard-gamepad focus/confirm/back with held-A suppression, instant Reduced Motion, complete result cleanup, and—on the mobile context—five contained/non-overlapping 320 × 568 targets plus an actual touch-center Retry. It rejects a mismatch or any page, console, request, or HTTP error.
+
 Reproduce it from the repository root:
 
 ```powershell
 npm ci
 npm run test:browser-performance
 npm run test:browser-crash
+npm run test:browser-results
 ```
 
 Run the DOM-free telemetry and pool/input unit gates separately:
@@ -162,6 +203,18 @@ After the mobile performance sample, the harness exercises control ownership and
 The runtime also clears active commands when the document becomes hidden. The input module has deterministic coverage for pointer end, pointer cancel, lost pointer capture, keyboard remapping, gamepad snapshots/deadzone behavior, development input, event bounds, invalid input rejection, and clear/pause reasons.
 
 ## Visual evidence
+
+| v1.8.1 Finish Forge desktop | v1.8.1 mobile DPR 2 |
+|:---:|:---:|
+| ![Finish Forge desktop receipt](../screenshots/v1.8.1/update-v181-finish-forge-hero.png) | <img src="../screenshots/v1.8.1/update-v181-mobile-finish.png" alt="Finish Forge at 390 by 844 and DPR 2" width="300"> |
+
+| Visible action focus | Reduced Motion invariant |
+|:---:|:---:|
+| ![Finish Forge focus rail](../screenshots/v1.8.1/update-v181-focused-action.png) | ![Immediately complete static Finish Forge receipt](../screenshots/v1.8.1/update-v181-reduced-motion.png) |
+
+The v1.8.1 files are deterministic local candidate captures. Their staged state identities, dimensions, determinism method, and evidence limits are recorded in the [v1.8.1 screenshot record](../screenshots/v1.8.1/README.md).
+
+### Preserved Crash Theater evidence
 
 | v1.8 live crash sample | v1.8 mobile DPR 2 sample |
 |:---:|:---:|

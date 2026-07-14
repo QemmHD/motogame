@@ -1,7 +1,7 @@
 {
   "name": "Moto Rush X3",
   "short_name": "MotoRushX3",
-  "description": "A momentum-driven motocross stunt racer with 17-part Crash Theater rigs, Kinetic Loom routes, moving machines, and verifiable Gold Runs.",
+  "description": "A momentum-driven motorcycle stunt racer with Finish Forge run receipts, 17-part Crash Theater rigs, moving machines, and verifiable Gold Runs.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

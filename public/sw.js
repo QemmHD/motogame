@@ -20,6 +20,8 @@ const PRECACHE = Object.freeze([
   './run-session.js',
   './effect-pool.js',
   './input-state.js',
+  './finish-flow.js',
+  './ui-input.js',
   './perf-metrics.js',
   './golden-tapes.json',
   './physics.js',

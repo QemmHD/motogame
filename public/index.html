@@ -1,8 +1,8 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b1f2a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,12 +31,23 @@
   }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     color: #ffd23e; font-weight: 800; letter-spacing: 2px; background: #12141d; z-index: 5; }
+  .sr-only { position: fixed !important; width: 1px !important; height: 1px !important;
+    padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="c" tabindex="0" role="application"
+  aria-label="Moto Rush X3 motorcycle racing game"></canvas>
 <div id="dev"></div>
-<div id="boot">LOADING…</div>
+<div id="announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<section id="semantic-results" class="sr-only" role="dialog" aria-modal="true"
+  aria-labelledby="semantic-results-title" hidden>
+  <h1 id="semantic-results-title">Run complete</h1>
+  <p id="semantic-results-summary"></p>
+  <div id="semantic-results-actions"></div>
+</section>
+<div id="boot" role="status" aria-live="polite">LOADING…</div>
 <script src="./version.js"></script>
 <script type="module" src="./game.js"></script>
 <script>

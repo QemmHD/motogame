@@ -9,23 +9,23 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Item | Current value |
 |---|---|
 | Product | Moto Rush X3 |
-| Candidate | `1.8.0` — Crash Theater |
+| Candidate | `1.8.1` — Fast Failure, Great Finish |
 | Runtime source of truth | `public/version.js` |
-| Package version | `1.8.0` |
+| Package version | `1.8.1` |
 | Replay identity | schema `1`; physics `physics-4`; course `course-4` |
-| Working branch | `agent/motorush-v18-crash-theater` |
+| Working branch | `agent/motorush-v181-fast-failure` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
-| Gameplay commit | [`89e5f7d9757e`](https://github.com/QemmHD/motogame/commit/89e5f7d9757eb90ae1f58f5dfd6914d5aaa7aad4) |
-| Draft pull request | [v1.8 draft `#3`](https://github.com/QemmHD/motogame/pull/3); v1.7 draft `#2` and v1.6 draft `#1` remain preserved |
-| Hosted gate | [Actions run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed at the gameplay commit; publish skipped |
-| Candidate delivery state | Pushed unmerged v1.8 draft candidate; complete local/hosted gates and four-image visual record pass, while physical-device coverage and production are `pending` |
+| Gameplay commit | `pending final v1.8.1 commit` |
+| Draft pull request | `pending v1.8.1 push`; preserved [v1.8 draft `#3`](https://github.com/QemmHD/motogame/pull/3), v1.7 draft `#2`, and v1.6 draft `#1` remain reviewable |
+| Hosted gate | `pending v1.8.1 draft-PR run`; preserved v1.8 [Actions run 29320024589](https://github.com/QemmHD/motogame/actions/runs/29320024589) passed with publish skipped |
+| Candidate delivery state | Uncommitted local v1.8.1 candidate; deterministic/browser/visual gates pass, while commit/push/hosted, physical-device, assistive-technology, and production evidence are `pending` |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
 
-The v1.8 gameplay candidate is pushed in draft [PR #3](https://github.com/QemmHD/motogame/pull/3) at SHA `89e5f7d9757e`. [Hosted Actions 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) passed the complete gate and skipped publishing, preserving the main-only deployment boundary. The v1.7 predecessor remains reviewable in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2), separately from preserved v1.6 draft PR `#1`. Do not describe v1.8 as merged, deployed, production-smoked, or live until each state has direct evidence.
+The v1.8.1 work exists locally on `agent/motorush-v181-fast-failure`. Do not invent a commit, pull request, hosted run, or public deployment until each action succeeds and its exact reference is written here. The preserved v1.8 gameplay candidate remains in draft [PR #3](https://github.com/QemmHD/motogame/pull/3) at final SHA `8e58b06f4a367d90fd0177a8cd06c4c313d569f0`; its [hosted Actions run 29320024589](https://github.com/QemmHD/motogame/actions/runs/29320024589) passed and skipped publishing. The v1.7 predecessor remains separately reviewable in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2). Do not describe v1.8.1 as merged, deployed, production-smoked, or live until each state has direct evidence.
 
-The build-version field is part of replay compatibility. Repository Gold tokens were intentionally refreshed for `1.8.0` while replay schema `1`, `physics-4`, and `course-4` remain unchanged. A direct v1.7/v1.8 manifest comparison finds no changed non-token field for any of the 16 routes: finish/replay/run ticks, elapsed/net time, score, crash/recovery count, and authoritative state hashes are identical. This is a build-only compatibility refresh for presentation and cache identity, not a physics or course migration.
+The build-version field is part of replay compatibility. Repository Gold tokens were intentionally refreshed for `1.8.1` while replay schema `1`, `physics-4`, and `course-4` remain unchanged. A direct v1.8.0/v1.8.1 manifest comparison finds no changed non-token field for any of the 16 routes: finish/replay/run ticks, elapsed/net time, score, crash/recovery count, and authoritative state hashes are identical. This is a build-only compatibility refresh for result presentation/input/accessibility and cache identity, not a physics or course migration. Save storage remains `motoRushX3.save.v1`.
 
 ## Current playable catalog
 
@@ -37,15 +37,31 @@ The candidate contains **16 handcrafted levels across three worlds**:
 
 R&D Yard remains a focused mechanics lab rather than a full six-course world. Lift Logic teaches the first sensor-triggered moving deck; Vector Weave teaches Flow Assist, Loft Line, and Soft Landing Kinetic Looms over a recoverable lower trail. Progression persists unlocks, stars, best time, best score, settings, and the player's latest completed proof per level. Every current course also has a read-only repository Gold Run loaded from `public/golden-tapes.json`.
 
-## v1.8 integrated architecture
+## v1.8.1 integrated architecture
 
 ### Authority and retry contract stay unchanged
 
-`public/run-session.js` remains the DOM-free authority for terrain/bike creation, rules, kinematic state, fixed playing/crashed steps, scoring, checkpoints, crash/fallout/respawn/finish transitions, force-field application, and proof-ready snapshots. Browser performance, input telemetry, particles, camera, audio, UI, Crash Theater contact/pose/FX, and debug presentation remain outside the proof hash. Crash entry now passes the browser a cloned reason record so presentation cannot retain a mutation path into authoritative `lastCrash` state.
+`public/run-session.js` remains the DOM-free authority for terrain/bike creation, rules, kinematic state, fixed playing/crashed steps, scoring, validated inclusive star thresholds, checkpoints, crash/fallout/respawn/finish transitions, force-field application, exact finish events, and proof-ready snapshots. Browser performance, UI edges, result focus/ceremony, score receipt layout, input telemetry, particles, camera, audio, UI, Crash Theater contact/pose/FX, and debug presentation remain outside the proof hash. Crash entry passes the browser a cloned reason record so presentation cannot retain a mutation path into authoritative `lastCrash` state.
 
 Manual checkpoint retry is still consumed and recorded on a fixed input tick. Automatic retry still uses `RUN_SESSION_CRASH_DURATION = 1.85` seconds and reaches the same deterministic boundary. Crash Theater begins only after the session has failed the run and cannot change bike, time, score, checkpoints, hazards, platform snapshots, force fields, replay ticks, or proof state. This keeps v1.8 inside U05 presentation scope rather than silently changing U06 retry semantics.
 
 Kinetic Looms retain their existing `physics-4` order after terrain/platform solving and rules/TNT. A lethal crash or valid finish wins before field application, and field velocity affects the next physics tick. No v1.8 Crash Theater path enters this authority.
+
+### Finish Forge report and route policy
+
+`public/finish-flow.js` accepts the authoritative finish event plus the browser's presentation-only score ledger. It requires elapsed minus flip credit to equal finish time, canonicalizes values to integer milliseconds, reconciles every ledger bucket exactly to the authoritative integer score, and returns a detached immutable report. It handles minute carry, PB/tied-record comparisons, and first-record behavior without letting sub-millisecond floating-point noise produce a visible `0 ms` record.
+
+The same module is the only policy for result actions. Retry targets the current playable course, Replay requires an existing proof token, Next requires the immediate catalog entry to exist and fall below the normalized unlock count, Menu is always safe, and Gold Run is offered only when a repository reference exists. Missing current/next records, a locked/final route, absent proof, malformed indices, and unknown actions fail closed. `game.js` resolves again immediately before mutation; it never clamps a missing Next to the final level.
+
+The browser records score events into four presentation buckets—TRICK BANK, AIR & LAND, RISK LINE, and OTHER—at the same event-consumption boundary that drives popups/audio. The ledger does not award points and resets with every run. A clean zero-point finish receives an explicit CLEAN RUN receipt row.
+
+### Result input, semantics, and reset ownership
+
+`public/ui-input.js` maps standard gamepad D-pad/stick/A/B snapshots into left/right/up/down/confirm/back rising edges with separate press/release thresholds. Held directions do not repeat, held A/throttle cannot confirm a newly opened receipt, and a direction plus confirm in the same rendered poll moves focus without activating the destination. Keyboard Arrow/WASD, Enter/Space, and Escape use the same result policy; pointer/touch uses only enabled registered Canvas rectangles.
+
+Finish Forge registers only enabled hit targets, each at least 44 × 44 CSS pixels and contained/non-overlapping through the 320 × 568 gate. Disabled Replay remains in the semantic dialog with its disabled state, while enabled action focus is mirrored between the DOM and Canvas. The Canvas has an application label and keyboard focus, the document declares English, a live region announces the exact result summary, and browser zoom is not disabled.
+
+Every result transition calls the shared presentation reset before exposing the next state. It clears finish timer/focus/report, semantic buttons and announcement, pooled particles/popups/tracks, camera shake/flash/slow/hitstop, ragdoll/contact/impact state, queued restart, ride/UI input latches, scheduled audio timers, and active synthesized SFX sources. Reduced Motion reveals the complete receipt immediately, retains focus/actions, and emits no finish confetti.
 
 ### Stateless Kinetic Loom authority
 
@@ -135,19 +151,21 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 `tools/performance-browser.mjs` starts the local static deployment boundary, launches an installed Chrome/Chromium, blocks service workers, captures three seconds of live autoplay after warm-up, rejects page/console errors, validates pool bounds, and runs two named profiles:
 
-The final v1.8 aggregate run used Chrome 150 and recorded both the ordinary play profiles and the dedicated live-crash profiles:
+The current v1.8.1 local gate used Chrome 150 and recorded ordinary play, preserved live-crash regression, and strict Finish Forge profiles:
 
 | Profile | Work samples | Work p95 | Diagnostic pacing p95 | Work budget | Result |
 |---|---:|---:|---:|---:|---|
-| 1280 × 720, DPR 1, desktop play | 360 | 1.00 ms | 7.20 ms | 8 ms | Pass |
-| 390 × 844, DPR 2, mobile/touch play | 360 | 0.81 ms | 7.20 ms | 12 ms | Pass |
-| 1280 × 720, DPR 1, unfrozen desktop TNT crash | 181 | 1.60 ms | diagnostic only | 8 ms | Pass |
-| 390 × 844, DPR 2, unfrozen mobile saw crash | 181 | 1.50 ms | diagnostic only | 12 ms | Pass |
+| 1280 × 720, DPR 1, desktop play | final profile | 1.10 ms | diagnostic only | 8 ms | Pass |
+| 390 × 844, DPR 2, mobile/touch play | final profile | 0.90 ms | diagnostic only | 12 ms | Pass |
+| 1280 × 720, DPR 1, unfrozen desktop TNT crash | final profile | 3.10 ms | diagnostic only | 8 ms | Pass |
+| 390 × 844, DPR 2, unfrozen mobile saw crash | final profile | 1.70 ms | diagnostic only | 12 ms | Pass |
 | 1280 × 720, Reduced Motion crusher (pose tick `0`) | — | not timed | — | invariant gate | Pass |
+| 1280 × 720, DPR 1, Finish Forge | 123 | 0.70 ms | diagnostic only | 8 ms | Pass |
+| 390 × 844, DPR 2, mobile Finish Forge | 127 | 0.60 ms | diagnostic only | 12 ms | Pass |
 
-The ordinary profiles retained 69/636 peak effects each. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state. The two dynamic crash profiles advanced to pose ticks 177/168 with 1,894/1,287 raw contacts while their crashed sessions, ragdoll contact, impacts, particles, camera, and retry timers remained live. Every crash profile verifies 17 parts, the authored cause/card, a finite camera/pose, a separately frozen 112-tick-equivalent review window, bounded effects, and clean retry/reset. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone.
+The mobile ordinary pass asserts disjoint and unclipped ride zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state. The two dynamic crash profiles advanced to pose ticks 177/168 with 1,894/1,287 raw contacts while crashed sessions, ragdoll contact, impacts, particles, camera, and retry timers remained live. Finish Forge exposed five semantic actions and five enabled 44 px-or-larger Canvas targets in each full scene; desktop passed keyboard plus standard-gamepad rising-edge navigation/confirm/back/held-A suppression, and mobile passed five non-overlapping 320 × 568 targets plus actual touch-center Retry. Both result profiles also prove canonical receipt/semantic parity, missing/locked route safety, Reduced Motion, clean reset, and zero page/console/request/HTTP errors. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical device.
 
-[v1.8 hosted Actions run `29319685056`](https://github.com/QemmHD/motogame/actions/runs/29319685056), pinned to gameplay SHA `89e5f7d9757e`, passed 3 assets, 108 systems, 16 routes, 32 Gold replays, 2 ordinary profiles, and 3 crash profiles. Hosted ordinary work p95 was 1.20 ms for both profiles; unfrozen crash p95 was 2.29 ms desktop TNT and 2.50 ms mobile DPR 2 saw. The Reduced Motion profile retained pose tick `0`, and publishing was correctly skipped. The preserved [v1.7 hosted run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559) remains predecessor evidence.
+The v1.8.1 hosted full gate is pending its draft PR. Preserved v1.8 [Actions run `29320024589`](https://github.com/QemmHD/motogame/actions/runs/29320024589), pinned to final SHA `8e58b06f4a367d90fd0177a8cd06c4c313d569f0`, passed and skipped publishing. The preserved [v1.7 hosted run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559) remains earlier predecessor evidence.
 
 ## Repository Gold Run evidence
 
@@ -160,10 +178,10 @@ Manifest: `public/golden-tapes.json`
 | Browser attempts per tape | 2 clean contexts |
 | Total verified replays | 32 |
 | Divergences | 0 |
-| Compatibility | build `1.8.0`; schema `1`; `physics-4`; `course-4` |
-| Reason for regeneration | Build-only compatibility/cache refresh for Crash Theater; no authoritative physics/course change |
-| Manifest SHA-256 | `FE153EFFD8517A3D69FFD0E7099740FCEDF10F2D7C70ECA3F2C803BE8ED8DA59` |
-| v1.7 baseline | Every non-token route field is identical across all 16 entries |
+| Compatibility | build `1.8.1`; schema `1`; `physics-4`; `course-4` |
+| Reason for regeneration | Build-only compatibility/cache refresh for Finish Forge; no authoritative physics/course change |
+| Manifest SHA-256 | `48F307B97C223E93795A20F5A5885488A20FD1C4C10B4525B4A4214698560EF4` |
+| v1.8.0 baseline | Every non-token route field is identical across all 16 entries |
 
 The full course table and regeneration policy remain in `docs/qa/GOLDEN_TAPES.md`. These are deterministic automation references, not clean-human, safe/apex, star-target, or personal-best claims.
 
@@ -185,17 +203,18 @@ npm run test:physics
 npm run test:goldens
 npm run test:browser-performance
 npm run test:browser-crash
+npm run test:browser-results
 ```
 
 Current expected coverage:
 
 - **Asset/offline:** 3 subtests.
-- **Deterministic systems:** 108 subtests, including 7 crash-contact, 6 crash-presentation, 10 ragdoll, and 7 debug-proxy cases alongside the preserved rules/replay/kinematics/force-zone/session/effect/input/performance fixtures.
+- **Deterministic systems:** 127 subtests, including 8 finish-flow, 5 UI-input, 4 release-metadata, 10 run-session, 7 crash-contact, 6 crash-presentation, 10 ragdoll, and 7 debug-proxy cases alongside preserved rules/replay/kinematics/force-zone/effect/ride-input/performance fixtures.
 - **Physics/routes:** 16 of 16 authored levels.
 - **Browser Gold Runs:** 16 tapes × 2 attempts = 32 verified replays.
-- **Browser profiles:** 2 measured ordinary profiles plus the mobile interruption/rotation/left-hand matrix and 3 dedicated crash profiles.
+- **Browser profiles:** 2 measured ordinary profiles plus the mobile interruption/rotation/left-hand matrix, 3 dedicated crash profiles, and 2 strict Finish Forge result profiles.
 
-Recorded on the final local v1.8 worktree: aggregate `npm test` passes all asset, system, route, Gold, ordinary browser, and crash-browser stages with the exact counts and measurements above.
+Recorded on the final local v1.8.1 runtime and documentation worktree: aggregate `npm test` completed in 334.1 seconds and passed 3 assets, 127 systems, all 16 routes, 32 Gold passes, two ordinary browser profiles, three crash profiles, and two strict Finish Forge profiles. Run `git diff --check` before commit.
 
 Focused commands:
 
@@ -203,8 +222,12 @@ Focused commands:
 npm run test:effects
 npm run test:input
 npm run test:performance
+npm run test:finish-flow
+npm run test:ui-actions
+npm run test:release-metadata
 npm run test:browser-performance
 npm run test:browser-crash
+npm run test:browser-results
 npm run test:rules
 npm run test:replay
 npm run test:kinematics
@@ -228,7 +251,16 @@ Inspect every manifest diff. A build-only regeneration must not be described as 
 
 ## Visual evidence
 
-The inspected v1.8 Crash Theater gallery is preserved under `docs/screenshots/v1.8/`:
+The inspected v1.8.1 Finish Forge gallery is preserved under `docs/screenshots/v1.8.1/`:
+
+- `update-v181-finish-forge-hero.png` — 1280 × 720 exact receipt with five actions and Next focus.
+- `update-v181-focused-action.png` — 1280 × 720 visible Gold Run focus treatment on a long-time result.
+- `update-v181-mobile-finish.png` — 390 × 844 DPR 2 complete portrait receipt with Retry focus.
+- `update-v181-reduced-motion.png` — instant static Level 16 receipt with only its three legal actions.
+
+`node tools/capture-v181.mjs --write` generated every scene twice in independent clean contexts after validating report arithmetic, action/focus, semantic output, viewport/DPR, and staged state identity. The final render-isolated pass matched at zero changed pixels and zero channel delta. Exact staged state hashes, dimensions, byte sizes, PNG SHA-256 values, method, review result, and evidence limits live in `docs/screenshots/v1.8.1/README.md`.
+
+The inspected v1.8 Crash Theater predecessor remains preserved under `docs/screenshots/v1.8/`:
 
 - `update-v18-crash-hero.png` — desktop 17-part Splitline hero with detached bike and cause/retry card.
 - `update-v18-ragdoll-proxies.png` — exact circles, sweeps, links, contacts, impact metrics, and aligned contact field.
@@ -259,29 +291,31 @@ The v1.5 Gold/reference/collision gallery and v1.4 gallery remain preserved unde
 
 ## Roadmap acceptance state
 
-| Update | Status in v1.8 candidate | Evidence | Still open |
+| Update | Status in v1.8.1 candidate | Evidence | Still open |
 |---|---|---|---|
-| U01 Release Gate | Release candidate | Complete local and hosted v1.8 gates: 3 assets, 108 systems, 16 routes, 32 Gold passes, 2 ordinary browser profiles, 3 crash profiles | Eligible deploy and production cache/install/offline smoke |
-| U02 Restart Contract | Partial foundation | Shared DOM-free session, 50-repeat rules restore, exact hazard/platform snapshots, extracted ride input | Physical keyboard/touch/gamepad results/restart matrix and further module splits |
+| U01 Release Gate | Release candidate | Local v1.8.1 assets, 127 systems, 16 routes, 32 Gold passes, 2 ordinary, 3 crash, and 2 Finish Forge profiles plus 4 captures | Final commit/PR/hosted gate, eligible deploy, production cache/install/offline smoke |
+| U02 Restart Contract | Partial foundation | Shared DOM-free session, 50-repeat rules restore, exact hazard/platform snapshots, extracted ride/UI input, explicit Finish Forge reset audit | Physical input/device restart matrix and further renderer/audio/persistence splits |
 | U03 Smooth Ride | Release candidate | Hard-bounded 384/32/220 pools, typed-ring metrics, 17 input tests, 6 metric tests, 2-profile p95, cancel/blur/rotation/left-hand matrix | Physical low-end phone and production-profile confirmation |
 | U04 Collision Keystone | Partial foundation | Swept platforms/hazards, stateless swept Kinetic Looms, bounded proxies, aligned browser overlay, retry fixtures | General moving/rotating/two-sided closed chains |
 | U05 Crash Theater | Release candidate | 17-part Splitline rig, ten causes, detached swept contact, 48-event impact bound, seeded FX/camera, ragdoll proxies, 30 finite/settling scripts, exact repeat, Reduced Motion invariants, local/hosted crash-browser passes, 4 inspected captures | Physical cause/retry matrix |
+| U06 Fast Failure, Great Finish | Release candidate | Exact DOM-free receipt/route policy, canonical PB timing, itemized score ledger, 5-action responsive Finish Forge, semantic dialog, keyboard/touch/standard-gamepad gate, Reduced Motion, full reset audit, 4 inspected captures | Physical input/assistive-technology matrix and hosted/production evidence |
 | U07 Engine Soul | Playable preview | Landing grades, momentum retention, five gear bands, reactive audio | Wheelie meter, tire/surface layers, measured envelopes/audio budget |
 | U09 Proof Replays | Release candidate | 16 build-refreshed tapes, 32 exact browser passes, no non-token v1.7 outcome change, explicit mismatch UI | Human route classes remain U10/U14 work |
 | U10 Moving Ground | Playable preview | Ten-cycle carry, bounded inheritance, triggered lift, exact restore, proxy audit | Broader/rotating geometry, dedicated framing, human safe/apex tapes |
 | U14 Campaign | Playable preview | 12 campaign routes headlessly complete and repository-proofed | Human safe/risky/touch/onboarding QA and star derivation |
-| U27 Accessibility | Playable preview | Responsive touch, 320 × 568 disjoint-target assertion, haptics, audio sliders, reduced motion, left-hand mode, rotation smoke | High contrast, full remapping UI, safe-area and physical-device matrix |
+| U27 Accessibility | Playable preview | Responsive touch, 320 × 568 ride/result target assertions, semantic result dialog/live region, browser zoom, haptics, audio sliders, reduced motion, left-hand mode, rotation smoke | High contrast, full remapping UI, safe-area, screen-reader, and physical-device matrix |
 
 Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptance gates remain authoritative.
 
 ## Known gaps and risks
 
-- **Candidate delivery:** v1.8 is pushed in draft PR #3 with a passing hosted gate and publish skipped; it remains unmerged and unreviewed for production promotion.
+- **Candidate delivery:** v1.8.1 is local and uncommitted; final commit/push, draft PR, hosted gate, review, and production promotion remain open. Preserved v1.8 draft PR #3 is predecessor evidence, not v1.8.1 delivery.
 - **Production:** the live URL can remain on an older build until review, eligible merge, publish, and direct smoke; local candidate tests are not production evidence.
 - **Crash visuals:** the four required browser captures pass local full-resolution inspection; physical browser/device rendering and the eventual production build remain unverified.
 - **Crash devices:** all ten causes, rapid manual retry, automatic retry, audio overlap, haptics, rotation, and long heavy-crash sessions still need representative physical keyboard/touch/gamepad and low-end-device smoke.
 - **Physical performance:** no deliberately low-end phone has repeated the p95 capture. Headless Chrome on the development host does not reproduce thermals, browser chrome, GPU/driver, installed-PWA, or service-worker costs.
 - **Input devices:** module tests cover gamepad snapshots, but a physical controller and a representative mobile multitouch set still need end-to-end production smoke.
+- **Assistive technology:** semantic dialog/live-region assertions pass in automation, but representative screen-reader/browser and keyboard-only review is not yet recorded.
 - **Human calibration:** automated route completion does not prove fun, readability, touch difficulty, or fair star times.
 - **Moving geometry:** platforms remain axis-aligned top-only rectangles. Arbitrary splines, rotation, two-sided closed chains, and breakable ground are not complete.
 - **Competition:** no PB tape library, translucent ghost, splits, daily relay, URL challenge UX, or pruning.
@@ -290,10 +324,10 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Immediate next priorities
 
-1. Exercise all ten causes and retry timing on keyboard, multitouch, and real gamepad, then repeat heavy crash scenes on a deliberately low-end Android device and representative iOS hardware.
-2. Promote only after review; verify visible `v1.8.0`, eligible Pages workflow, cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
-3. Continue U04 with broader moving/rotating or closed collision chains, keeping proof/version and reset implications explicit; separately human-tune Vector Weave without replacing the deterministic recovery reference.
-4. Record human safe/apex runs separately from recovery references, and keep extracting audio, persistence, renderer, and UI ownership without changing fixed-step authority.
+1. Create the final v1.8.1 gameplay/documentation commit, push the branch, open a draft PR, and record the hosted full gate with publishing skipped.
+2. Exercise Finish Forge plus all ten crash causes on physical keyboard, multitouch, real gamepad, and representative screen-reader/browser combinations; repeat heavy scenes on low-end Android and representative iOS hardware.
+3. Promote only after review; verify visible `v1.8.1`, eligible Pages workflow, cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
+4. Continue U04 with broader moving/rotating or closed collision chains only with an explicit reset/proof contract; record human safe/apex runs separately and keep extracting renderer/audio/persistence ownership.
 
 ## Local QA routes
 
@@ -313,6 +347,8 @@ Useful routes:
 - `http://127.0.0.1:8080/?dev&level=16&autoplay`
 - `http://127.0.0.1:8080/?dev&level=16&autoplay&debug=collisions`
 - `http://127.0.0.1:8080/?dev&level=16&autoplay&touch`
+- `http://127.0.0.1:8080/?dev&finish&capture&level=1`
+- `http://127.0.0.1:8080/?dev&finish&capture&level=16&reduced`
 - `http://127.0.0.1:8080/?dev&touch`
 
 For a deterministic Crash Theater scene, open a `?dev&level=16` route and call from the browser console:
@@ -322,6 +358,8 @@ __moto.stageCrash({ type: 'mace', warmupTicks: 42, presentationTicks: 36 });
 ```
 
 Use `collisionDebug: true`, `reducedMotion: true`, another authored cause ID, or `__moto.freezePresentation(true)` for reproducible inspection. These hooks are development-only and are not player-facing authority.
+
+For deterministic result inspection, use the `?dev&finish&capture` route or call `__moto.stageFinish({...})`. `__moto.finishSnapshot()`, `__moto.uiSnapshot()`, and `__moto.runtimeSnapshot()` expose detached QA state; `stepFinishPresentationTicks()` advances only presentation. These hooks must not be used as evidence that progression mutations are safe—the strict browser gate exercises real keyboard, touch, gamepad, semantic, and reset routes separately.
 
 ## Handoff discipline
 

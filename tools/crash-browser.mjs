@@ -358,7 +358,7 @@ function assertRequiredPose(profile, scene) {
     `${profile.id} did not paint the Crash Theater badge`);
   invariant(scene.text.some(text => text.includes(profile.causeLabel)),
     `${profile.id} did not paint ${profile.causeLabel}`);
-  invariant(scene.text.includes('Tap to respawn'),
+  invariant(scene.text.includes('Press / tap to respawn'),
     `${profile.id} did not paint the retry prompt after ${scene.crashAge.toFixed(3)} seconds`);
   invariant(scene.crashAge > 0.42,
     `${profile.id} was sampled before the retry UI reveal`);

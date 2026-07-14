@@ -14,6 +14,19 @@ import { RUN_SESSION_CRASH_DURATION, initializeRunSession, snapshotRunSession,
   stepCrashedRun, stepPlayingRun } from './run-session.js';
 import { createEffectPool } from './effect-pool.js';
 import { createInputState } from './input-state.js';
+import {
+  buildFinishReport,
+  createScoreLedger,
+  focusedResultAction,
+  formatRaceTime,
+  initialResultFocus,
+  moveResultFocus,
+  recordScoreEvent,
+  resetScoreLedger,
+  resolveResultAction,
+  timeToMilliseconds,
+} from './finish-flow.js';
+import { createUiInput, uiCommandForKey } from './ui-input.js';
 import { PERFORMANCE_EVENT, createPerformanceMetrics, recordPerformanceEvent,
   recordPerformanceFrame, recordPerformanceViewport, resetPerformanceMetrics,
   snapshotPerformanceMetrics } from './perf-metrics.js';
@@ -30,7 +43,7 @@ const ASSETS = {
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
 const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: CONFIG.wheelR, sag: 0.22, dip: 18 };
-const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.8-dev';
+const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.8.1-dev';
 const BUILD = globalThis.MOTO_RUSH_BUILD?.label || `v${BUILD_VERSION}`;
 const IMG = {};
 const GOLDEN_TAPES = new Map();
@@ -73,6 +86,59 @@ const TILE_WORLD = 170;                            // ground texture tile size i
 
 // ---------------------------------------------------------------- canvas ----
 const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const announcer = document.getElementById('announce');
+const semanticResults = document.getElementById('semantic-results');
+const semanticResultsTitle = document.getElementById('semantic-results-title');
+const semanticResultsSummary = document.getElementById('semantic-results-summary');
+const semanticResultsActions = document.getElementById('semantic-results-actions');
+function announce(message) {
+  if (!announcer) return;
+  announcer.textContent = '';
+  requestAnimationFrame(() => { announcer.textContent = String(message || ''); });
+}
+function hideSemanticResults() {
+  const restoreCanvasFocus = !!semanticResults?.contains(document.activeElement);
+  if (semanticResults) semanticResults.hidden = true;
+  if (semanticResultsActions) semanticResultsActions.replaceChildren();
+  canvas.setAttribute('aria-label', 'Moto Rush X3 motorcycle racing game');
+  if (restoreCanvasFocus) canvas.focus({ preventScroll: true });
+}
+function semanticResultButton(target) {
+  return target instanceof HTMLButtonElement && !!semanticResultsActions?.contains(target)
+    ? target : null;
+}
+function focusSemanticResult(index = G.finishFocus) {
+  const button = semanticResultsActions?.querySelectorAll('button')?.[index];
+  if (!button || button.disabled) return false;
+  button.focus({ preventScroll: true });
+  return true;
+}
+function syncSemanticResults(report) {
+  if (!semanticResults || !report) return;
+  const title = G.replayFailed ? STR.proofFailed : 'Finish Forge run receipt';
+  const summary = `${report.level.name}. Net time ${formatRaceTime(report.timing.net)}. `
+    + `${report.stars} stars. Score ${report.score.total}.`;
+  semanticResultsTitle.textContent = title;
+  semanticResultsSummary.textContent = summary;
+  semanticResultsActions.replaceChildren();
+  for (const action of report.actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.disabled = !action.enabled;
+    button.dataset.action = action.id;
+    button.addEventListener('focus', () => {
+      const index = report.actions.indexOf(action);
+      setResultFocus(index, false);
+      if (!G.captureFrozen && G.state === 'finished') render();
+    });
+    button.addEventListener('click', () => doUI(action.id));
+    semanticResultsActions.append(button);
+  }
+  semanticResults.hidden = false;
+  canvas.setAttribute('aria-label', `${summary} Use arrow keys to choose an action and Enter to activate.`);
+  focusSemanticResult();
+}
 const DPR_CAP = 2;
 let cssW = 0, cssH = 0, dpr = 1;
 function viewportRotation() {
@@ -102,9 +168,13 @@ function loadSave() {
 }
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
 const save = loadSave();
-save.best = save.best || {}; save.stars = save.stars || {}; save.unlocked = save.unlocked || 1;
-save.bestScore = save.bestScore || {};
-save.replays = save.replays || {};
+function saveRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+save.best = saveRecord(save.best); save.stars = saveRecord(save.stars);
+save.bestScore = saveRecord(save.bestScore); save.replays = saveRecord(save.replays);
+const storedUnlocked = Number(save.unlocked);
+save.unlocked = Number.isSafeInteger(storedUnlocked) && storedUnlocked > 0 ? storedUnlocked : 1;
 
 // settings substrate (persisted; every future toggle lives here)
 const prefersReduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -122,6 +192,21 @@ const Audio2 = (() => {
   let musicBus = null, menuEl = null, driveEl = null, menuGain = null, driveGain = null, musicReady = false;
   let noiseBuffer = null;
   let muted = save.muted || false, musicKind = 'menu', lastGear = 1;
+  const pendingSfx = new Set();
+  const pendingTimers = new Set();
+  function trackSfx(source) {
+    pendingSfx.add(source);
+    source.addEventListener?.('ended', () => pendingSfx.delete(source), { once: true });
+    return source;
+  }
+  function schedule(callback, delay) {
+    const timer = setTimeout(() => {
+      pendingTimers.delete(timer);
+      callback();
+    }, delay);
+    pendingTimers.add(timer);
+    return timer;
+  }
   function loadMusic() {
     try {
       menuEl = new Audio('./assets/music_menu.m4a'); menuEl.loop = true; menuEl.preload = 'auto';
@@ -190,7 +275,7 @@ const Audio2 = (() => {
   }
   function blip(freq, dur, type = 'sine', vol = 0.3, slideTo = null) {
     if (!ac || muted) return;
-    const o = ac.createOscillator(), g = ac.createGain();
+    const o = trackSfx(ac.createOscillator()), g = ac.createGain();
     o.type = type; o.frequency.value = freq;
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
     g.gain.value = sfxVol(vol); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
@@ -199,14 +284,28 @@ const Audio2 = (() => {
   function noise(dur, vol = 0.4, filt = 900) {
     if (!ac || muted || !noiseBuffer) return;
     const duration = Math.max(0.02, Math.min(0.6, dur));
-    const src = ac.createBufferSource(); src.buffer = noiseBuffer;
+    const src = trackSfx(ac.createBufferSource()); src.buffer = noiseBuffer;
     const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filt;
     const g = ac.createGain(); g.gain.setValueAtTime(sfxVol(vol), ac.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
     src.connect(f); f.connect(g); g.connect(master); src.start(); src.stop(ac.currentTime + duration);
   }
+  function resetRun() {
+    for (const timer of pendingTimers) clearTimeout(timer);
+    pendingTimers.clear();
+    for (const source of pendingSfx) { try { source.stop(); } catch {} }
+    pendingSfx.clear();
+    lastGear = 1;
+    if (ac) {
+      const time = ac.currentTime;
+      for (const parameter of [engine?.frequency, engFilt?.frequency, engGain?.gain]) {
+        try { parameter?.cancelScheduledValues(time); } catch {}
+      }
+    }
+    stopEngine();
+  }
   return {
-    resume, setEngine, stopEngine, setMusicState, loadMusic, applyMusicGains,
+    resume, setEngine, stopEngine, setMusicState, loadMusic, applyMusicGains, resetRun,
     land(v) { noise(0.14, Math.min(0.5, 0.15 + v / 900), 500); blip(90, 0.12, 'sine', 0.25, 60); },
     crash() { noise(0.5, 0.6, 1400); blip(180, 0.5, 'sawtooth', 0.4, 40); duck(); },
     impact(speed, surface) {
@@ -218,28 +317,60 @@ const Audio2 = (() => {
     },
     flip() { blip(520, 0.16, 'square', 0.22, 900); },
     stunt() { blip(680, 0.12, 'triangle', 0.2, 1100); },
-    checkpoint() { blip(600, 0.1, 'triangle', 0.28); setTimeout(() => blip(900, 0.14, 'triangle', 0.28), 90); },
-    loom() { blip(420, 0.16, 'triangle', 0.2, 880); setTimeout(() => blip(740, 0.1, 'sine', 0.16, 980), 70); },
-    finish() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.22, 'triangle', 0.3), i * 110)); },
+    checkpoint() { blip(600, 0.1, 'triangle', 0.28); schedule(() => blip(900, 0.14, 'triangle', 0.28), 90); },
+    loom() { blip(420, 0.16, 'triangle', 0.2, 880); schedule(() => blip(740, 0.1, 'sine', 0.16, 980), 70); },
+    finish() { [523, 659, 784, 1046].forEach((f, i) => schedule(() => blip(f, 0.22, 'triangle', 0.3), i * 110)); },
     toggle() { muted = !muted; save.muted = muted; persist(); if (master && ac) master.gain.setTargetAtTime(muted ? 0 : 0.9, ac.currentTime, 0.05); return muted; },
     get muted() { return muted; },
+    inspect() { return Object.freeze({ pendingTimers: pendingTimers.size,
+      pendingSfx: pendingSfx.size, lastGear, musicKind }); },
   };
 })();
 
 // ---------------------------------------------------------------- input -----
 const inputState = createInputState({ leftHanded: SETTINGS.leftHanded });
+const uiInput = createUiInput();
 const liveInput = { gas: false, brake: false, leanBack: false, leanFwd: false };
 const displayInput = { gas: false, brake: false, leanBack: false, leanFwd: false };
 let controlLayout = null;
 let gamepadConnected = !!Array.from(navigator.getGamepads?.() || []).find(Boolean);
 addEventListener('keydown', e => {
-  if (inputState.keyDown(e.code).handled) e.preventDefault();
-  if (e.code === 'KeyR') restartLevel();
+  const resultButton = semanticResultButton(e.target);
+  if (resultButton) {
+    if (e.repeat && (e.code === 'Enter' || e.code === 'Space')) {
+      e.preventDefault(); Audio2.resume(); return;
+    }
+    if (!e.repeat && (e.code === 'Escape' || e.code === 'Backspace')) {
+      e.preventDefault(); doUI('menu'); Audio2.resume(); return;
+    }
+    const buttonCommand = !e.repeat && uiCommandForKey(e.code);
+    if (buttonCommand && buttonCommand !== 'confirm' && buttonCommand !== 'back') {
+      e.preventDefault();
+      if (handleUiCommand(buttonCommand, 'semantic-keyboard')) focusSemanticResult();
+      Audio2.resume(); return;
+    }
+    // Keep native Tab/Shift+Tab traversal and native button Enter/Space
+    // activation. The focus listener synchronizes the visible Canvas rail.
+    if (e.code === 'Tab' || e.code === 'Enter' || e.code === 'Space') {
+      Audio2.resume(); return;
+    }
+    // Unrelated result shortcuts (R/G/M/C) continue through the shared path.
+  }
+  const uiCommand = uiCommandForKey(e.code);
+  const uiHandled = !e.repeat && uiCommand && handleUiCommand(uiCommand, 'keyboard');
+  if (G.state === 'playing' && inputState.keyDown(e.code).handled) e.preventDefault();
+  if (uiHandled) e.preventDefault();
+  if (e.code === 'KeyR') {
+    if (G.state === 'finished' && G.level) startLevel(G.levelIdx);
+    else restartLevel();
+  }
   if (e.code === 'KeyM') Audio2.toggle();
   if (e.code === 'KeyC' && dev) collisionDebug = !collisionDebug;
   if (e.code === 'KeyG' && G.state === 'finished') doUI('golden');
-  if (e.code === 'Escape' || e.code === 'KeyP') { if (G.settingsOpen) G.settingsOpen = false; else togglePause(); }
-  if (e.code === 'Space' || e.code === 'Enter') { primaryAction(); e.preventDefault(); }
+  if (!uiHandled && (e.code === 'Escape' || e.code === 'KeyP')) { if (G.settingsOpen) G.settingsOpen = false; else togglePause(); }
+  if (!e.repeat && !uiHandled && (e.code === 'Space' || e.code === 'Enter')) {
+    primaryAction(); e.preventDefault();
+  }
   Audio2.resume();
 });
 addEventListener('keyup', e => { if (inputState.keyUp(e.code).handled) e.preventDefault(); });
@@ -247,6 +378,7 @@ addEventListener('gamepadconnected', () => { gamepadConnected = true; });
 addEventListener('gamepaddisconnected', () => {
   gamepadConnected = !!Array.from(navigator.getGamepads?.() || []).find(Boolean);
   if (!gamepadConnected) inputState.updateGamepads([]);
+  uiInput.poll([]);
 });
 
 // pointers for on-screen controls + UI taps
@@ -373,6 +505,7 @@ function createdEffectCount() {
 }
 
 const levels = buildLevels();
+save.unlocked = Math.max(1, Math.min(levels.length, save.unlocked));
 const worlds = [...new Set(levels.map(L => L.world || 'Campaign'))];
 const levelIndicesByWorld = worlds.map(world => Object.freeze(levels
   .map((level, index) => ({ level, index }))
@@ -398,21 +531,66 @@ const G = {
   replayTick: 0, replayVerified: false, replayRecorded: false, replayFailed: null,
   restartQueued: false, replayUnavailable: null,
   replayNotice: null,
+  scoreLedger: createScoreLedger(), finishReport: null, finishFocus: -1,
   devWaitTicks: 0, devCrashCount: 0,
   debugProxy: null,
   captureFrozen: false,
 };
+let resetLoopClock = () => {};
 
 function replayMetadata(i) {
   return { levelId: `level-${i + 1}`, buildVersion: BUILD_VERSION,
     physicsVersion: PHYSICS_VERSION, generatorVersion: COURSE_VERSION };
 }
 
-function startLevel(i, { replayToken = null, replaySource = null } = {}) {
-  const L = levels[i]; G.levelIdx = i; G.level = L;
+function validLevelIndex(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value < levels.length
+    && levels[value] && typeof levels[value] === 'object' && levels[value].course;
+}
+
+function routeNotice(reason) {
+  const detail = {
+    'level-locked': 'Clear the previous route first.',
+    'level-missing': 'That route is unavailable in this build.',
+    'next-locked': 'The next route is still locked.',
+    'next-missing': 'The next route is unavailable in this build.',
+    'current-missing': 'The current route is unavailable.',
+    'campaign-complete': 'Relay complete. Returning to the board.',
+  }[reason] || 'That route is unavailable.';
+  G.replayNotice = { message: 'ROUTE BLOCKED', detail, life: 3.5 };
+  announce(`Route blocked. ${detail}`);
+}
+
+function resetLevelPresentation() {
+  Audio2.resetRun();
+  particlePool.clear(); popupPool.clear(); trackPool.clear();
+  G.shake = 0; G.cpFlash = 0; G.flash = 0; G.slow = 1; G.hitstop = 0;
+  G.ragdoll = null; G.ragdollPose = null;
+  G.crashWorld = null; G.crashReason = null; G.crashProfile = null;
+  G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashLastAudioAge = -10;
+  G.crashCamera = null; G.crashSeed = 0; G.captureFrozen = false;
+  G.trackT = 0; G.riderLean = 0; G.leanCmd = 0; G.engineGear = 1; G.debugProxy = null;
+  G.finishTimer = 0; G.finishNewRecord = false; G.finishRecordScore = false;
+  G.finishReport = null; G.finishFocus = -1;
+  G.settingsOpen = false;
+  G.restartQueued = false; G.replayNotice = null;
+  G.devWaitTicks = 0; G.devCrashCount = 0;
+  resetScoreLedger(G.scoreLedger);
+  uiInput.prime(navigator.getGamepads?.() || []);
+  hideSemanticResults();
+  resetLoopClock();
+}
+
+function startLevel(i, { replayToken = null, replaySource = null, requireUnlocked = false } = {}) {
+  const index = Number(i);
+  if (!validLevelIndex(index)) { routeNotice('level-missing'); return false; }
+  if (requireUnlocked && index >= Math.max(1, Math.min(levels.length, Math.trunc(Number(save.unlocked) || 1)))) {
+    routeNotice('level-locked'); return false;
+  }
+  const L = levels[index];
   let playback = null;
   if (replayToken) {
-    const decoded = decodeReplay(replayToken, { expected: replayMetadata(i) });
+    const decoded = decodeReplay(replayToken, { expected: replayMetadata(index) });
     if (decoded.ok) playback = createReplayPlayback(decoded.replay);
     else {
       if (replaySource !== 'golden' && save.replays[i] === replayToken) {
@@ -425,22 +603,14 @@ function startLevel(i, { replayToken = null, replaySource = null } = {}) {
       return false;
     }
   }
-  G.replayNotice = null;
-  initializeRunSession(G, L, i);
-  particlePool.clear(); popupPool.clear(); G.shake = 0; G.cpFlash = 0;
-  G.ragdoll = null; G.ragdollPose = null;
-  G.crashWorld = null; G.crashReason = null; G.crashProfile = null;
-  G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashLastAudioAge = -10;
-  G.crashCamera = null; G.crashSeed = 0; G.captureFrozen = false;
-  G.slow = 1; G.hitstop = 0; G.flash = 0;
-  trackPool.clear(); G.trackT = 0;
-  G.riderLean = 0; G.leanCmd = 0; G.engineGear = 1; G.debugProxy = null;
+  resetLevelPresentation();
+  G.levelIdx = index; G.level = L;
+  initializeRunSession(G, L, index);
   G.replayMode = !!playback; G.replayPlayback = playback; G.replayToken = replayToken;
   G.replaySource = playback ? (replaySource || 'saved') : null;
   G.replayRecorder = playback ? null : createReplayRecorder(replayMetadata(i));
   G.replayTick = 0; G.replayVerified = false; G.replayRecorded = false; G.replayFailed = null;
   G.restartQueued = false; G.replayUnavailable = null;
-  G.devWaitTicks = 0; G.devCrashCount = 0;
   G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
   clearControls('level-start');
   Audio2.setMusicState('drive');
@@ -451,16 +621,19 @@ function restartLevel() {
     ? { replayToken: G.replayToken, replaySource: G.replaySource } : undefined);
 }
 function finishRespawnPresentation() {
+  Audio2.resetRun();
   G.ragdoll = null; G.ragdollPose = null;
   G.crashWorld = null; G.crashReason = null; G.crashProfile = null;
   G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashCamera = null; G.crashSeed = 0;
-  particlePool.clear(); popupPool.clear(); G.shake = 0; G.hitstop = 0; G.flash = 0; G.slow = 1;
+  particlePool.clear(); popupPool.clear(); trackPool.clear();
+  G.shake = 0; G.hitstop = 0; G.flash = 0; G.slow = 1; G.cpFlash = 0; G.trackT = 0;
   G.cam.kickX = 0; G.cam.kickY = 0; G.restartQueued = false;
+  G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0;
   if (devAutoplay) {
     G.devCrashCount++;
     G.devWaitTicks = 12 + (G.devCrashCount % 7) * 11;
   }
-  G.riderLean = 0; G.leanCmd = 0;
+  G.riderLean = 0; G.leanCmd = 0; G.engineGear = 1; G.debugProxy = null;
   clearControls('respawn');
   Audio2.setMusicState('drive');
 }
@@ -472,10 +645,54 @@ function primaryAction() {
   if (G.settingsOpen) { G.settingsOpen = false; return; }
   if (G.state === 'menu') startLevel(Math.min(save.unlocked - 1, levels.length - 1));
   else if (G.state === 'crashed') G.restartQueued = true;
+  else if (G.state === 'finished') activateFocusedResult();
   else if (G.state === 'paused') G.state = 'playing';
 }
 
-function starsFor(L, time) { const s = L.star; if (time <= s[0]) return 3; if (time <= s[1]) return 2; if (time <= s[2]) return 1; return 0; }
+function setResultFocus(index, announceFocus = true) {
+  const actions = G.finishReport?.actions || [];
+  if (!Number.isInteger(index) || index < 0 || index >= actions.length
+      || actions[index]?.enabled !== true) return false;
+  G.finishFocus = index;
+  if (G.captureFrozen) render();
+  if (announceFocus) announce(`${actions[index].label} selected`);
+  return true;
+}
+
+function moveFinishFocus(direction) {
+  const actions = G.finishReport?.actions || [];
+  return setResultFocus(moveResultFocus(actions, G.finishFocus, direction));
+}
+
+function activateFocusedResult() {
+  const action = focusedResultAction(G.finishReport?.actions || [], G.finishFocus);
+  if (!action) return false;
+  doUI(action.id);
+  return true;
+}
+
+function handleUiCommand(command, source = 'unknown') {
+  if (G.settingsOpen && command === 'back') { G.settingsOpen = false; return true; }
+  if (G.state === 'crashed') {
+    if (command === 'confirm') { G.restartQueued = true; announce('Checkpoint retry'); return true; }
+    if (command === 'back') { doUI('menu'); return true; }
+    return false;
+  }
+  if (G.state !== 'finished') return false;
+  if (command === 'left' || command === 'up') return moveFinishFocus(-1);
+  if (command === 'right' || command === 'down') return moveFinishFocus(1);
+  if (command === 'confirm') return activateFocusedResult();
+  if (command === 'back') { doUI('menu'); return true; }
+  return false;
+}
+
+function handleUiEdges(edges) {
+  if (!edges) return;
+  if (edges.left || edges.up) { handleUiCommand(edges.left ? 'left' : 'up', 'gamepad'); return; }
+  if (edges.right || edges.down) { handleUiCommand(edges.right ? 'right' : 'down', 'gamepad'); return; }
+  if (edges.confirm) handleUiCommand('confirm', 'gamepad');
+  if (edges.back) handleUiCommand('back', 'gamepad');
+}
 
 const NEUTRAL_INPUT = Object.freeze({ gas: false, brake: false, leanBack: false, leanFwd: false });
 const replayInput = { gas: false, brake: false, leanBack: false, leanFwd: false, restart: false };
@@ -507,6 +724,7 @@ function failReplay(reason) {
   G.finishTime = Math.max(0, G.elapsed - G.flipBonus); G.finishScore = G.score;
   G.finishStars = 0; G.finishNewRecord = false; G.finishRecordScore = false;
   G.replayVerified = false; G.replayFailed = reason || 'state mismatch';
+  finalizeFinishReport(false);
   Audio2.stopEngine(); Audio2.setMusicState('menu');
 }
 
@@ -567,7 +785,10 @@ function simulate(dt) {
       if (landing.gradeWorthy && landing.grade === 'rough') addPopup(STR.landingRough, landing.x, landing.y - 68, '#ffbd62');
       else if (landing.gradeWorthy && landing.grade === 'slam') addPopup(STR.landingSlam, landing.x, landing.y - 68, '#ff6a4a');
     }
-    for (const score of events.scores) presentSessionScore(score);
+    for (const score of events.scores) {
+      recordScoreEvent(G.scoreLedger, score);
+      presentSessionScore(score);
+    }
     if (events.stateAfter === 'playing' && bike.grounded && input.gas && bike.speed > 120 && Math.random() < 0.6) dust(bike.rear.x, bike.rear.y, bike.speed);
     if (events.stateAfter === 'playing' && bike.grounded && input.gas && Math.random() < 0.25) exhaust(bike);
     // tire tracks (decal ring buffer)
@@ -694,13 +915,56 @@ function doCrash(reason = null) {
     deterministicCrashBurst(G.bike.head.x, G.bike.head.y, profile.type === 'tnt' ? 24 : 15);
   }
 }
+function savedNonNegative(record, index) {
+  const value = Number(record?.[index]);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function boundedUnlocked() {
+  const value = Number(save.unlocked);
+  return Number.isSafeInteger(value) ? Math.max(1, Math.min(levels.length, value)) : 1;
+}
+
+function finalizeFinishReport(recordEligible, previous = {}) {
+  const previousBestTime = previous.time !== undefined
+    ? previous.time : savedNonNegative(save.best, G.levelIdx);
+  const previousBestScore = previous.score !== undefined
+    ? previous.score : savedNonNegative(save.bestScore, G.levelIdx);
+  const token = G.replayToken || save.replays[G.levelIdx] || null;
+  G.finishReport = buildFinishReport({
+    level: G.level,
+    levelIndex: G.levelIdx,
+    levels,
+    unlocked: boundedUnlocked(),
+    elapsed: G.elapsed,
+    flipBonus: G.flipBonus,
+    finishTime: G.finishTime,
+    score: G.finishScore,
+    stars: G.finishStars,
+    previousBestTime,
+    previousBestScore,
+    scoreLedger: G.scoreLedger,
+    replayAvailable: typeof token === 'string' && token.length > 0,
+    goldenAvailable: GOLDEN_TAPES.has(G.levelIdx),
+    recordEligible,
+  });
+  G.finishNewRecord = G.finishReport.timing.newRecord;
+  G.finishRecordScore = G.finishReport.score.newRecord;
+  const preferredAction = G.replayMode || !recordEligible || previousBestTime !== null
+    ? 'retry' : 'next';
+  G.finishFocus = initialResultFocus(G.finishReport.actions, preferredAction);
+  syncSemanticResults(G.finishReport);
+  announce(`${G.replayFailed ? STR.proofFailed : STR.levelComplete}. ${formatRaceTime(G.finishTime)}. ${G.finishStars} stars. ${G.finishReport.actions[G.finishFocus]?.label || STR.menu} selected.`);
+  return G.finishReport;
+}
+
 function finishLevel() {
   G.state = 'finished'; G.running = false; G.finishTimer = 0; G.slow = 1; G.hitstop = 0;
-  const time = Math.max(0, G.elapsed - G.flipBonus);
-  G.finishTime = time; G.finishScore = G.score;
-  G.finishStars = starsFor(G.level, time);
+  // run-session.js has already committed the authoritative finish fields.
+  const time = G.finishTime;
   const proofState = replayStateSnapshot();
-  const prev = save.best[G.levelIdx];
+  const prev = savedNonNegative(save.best, G.levelIdx);
+  const previousScore = savedNonNegative(save.bestScore, G.levelIdx);
   G.replayRecorded = false; G.replayFailed = null;
   if (G.replayMode) {
     G.finishNewRecord = false; G.finishRecordScore = false;
@@ -708,12 +972,14 @@ function finishLevel() {
       && hashReplayState(proofState) === G.replayPlayback.replay.stateHash;
     if (!G.replayVerified) G.replayFailed = 'final state mismatch';
   } else {
-    G.finishNewRecord = (prev == null || time < prev);
-    if (G.finishNewRecord) save.best[G.levelIdx] = time;
-    G.finishRecordScore = G.score > (save.bestScore[G.levelIdx] || 0);
-    if (G.finishRecordScore) save.bestScore[G.levelIdx] = G.score;
-    save.stars[G.levelIdx] = Math.max(save.stars[G.levelIdx] || 0, G.finishStars);
-    if (G.levelIdx + 1 < levels.length) save.unlocked = Math.max(save.unlocked, G.levelIdx + 2);
+    G.finishNewRecord = prev == null || timeToMilliseconds(time) < timeToMilliseconds(prev);
+    G.finishRecordScore = previousScore == null || G.score > previousScore;
+    if (!dev) {
+      if (G.finishNewRecord) save.best[G.levelIdx] = time;
+      if (G.finishRecordScore) save.bestScore[G.levelIdx] = G.score;
+      save.stars[G.levelIdx] = Math.max(save.stars[G.levelIdx] || 0, G.finishStars);
+      if (G.levelIdx + 1 < levels.length) save.unlocked = Math.max(boundedUnlocked(), G.levelIdx + 2);
+    }
     try {
       const recorder = G.replayRecorder; G.replayRecorder = null;
       if (!recorder) throw new Error(G.replayUnavailable || 'recorder unavailable');
@@ -721,10 +987,11 @@ function finishLevel() {
       G.replayToken = encodeReplay(replay); save.replays[G.levelIdx] = G.replayToken;
       G.replayRecorded = true;
     } catch (error) { console.warn('replay proof unavailable', error); }
-    persist();
+    if (!dev) persist();
   }
+  finalizeFinishReport(!G.replayMode && !dev, { time: prev, score: previousScore });
   Audio2.stopEngine(); Audio2.finish(); Audio2.setMusicState('menu'); vib(60);
-  confetti();
+  if (!reduced()) confetti();
 }
 
 // ---- particles ----
@@ -1565,18 +1832,34 @@ function drawWorld(scale) {
 }
 
 // ---------------------------------------------------------------- HUD -------
-function fmt(t) { const m = Math.floor(t / 60), s = (t % 60); return (m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2)); }
+function fmt(t) { return formatRaceTime(t); }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function registerButton(x, y, w, h, id) {
   let button = uiButtons[uiButtonCount];
   if (!button) { button = { x: 0, y: 0, w: 0, h: 0, id: '' }; uiButtons.push(button); }
   button.x = x; button.y = y; button.w = w; button.h = h; button.id = id; uiButtonCount++;
 }
-function btn(x, y, w, h, label, id, color = '#ff5a3c') {
+function btn(x, y, w, h, label, id, color = '#ff5a3c', options = {}) {
+  const disabled = options.disabled === true;
+  const selected = options.selected === true && !disabled;
+  ctx.save();
+  ctx.globalAlpha = disabled ? 0.34 : 1;
+  if (selected) {
+    ctx.shadowColor = 'rgba(85,216,255,0.7)'; ctx.shadowBlur = 18;
+    roundRect(x - 3, y - 3, w + 6, h + 6, 14);
+    ctx.fillStyle = 'rgba(85,216,255,0.18)'; ctx.fill();
+    ctx.shadowBlur = 0; ctx.lineWidth = 3; ctx.strokeStyle = '#dff8ff'; ctx.stroke();
+  }
   roundRect(x, y, w, h, 12); ctx.fillStyle = color; ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(h * 0.42) + 'px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + w / 2, y + h / 2 + 1); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  registerButton(x, y, w, h, id);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = disabled ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.16)'; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '800 ' + Math.max(11, Math.round(h * 0.34)) + 'px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+  if (selected) {
+    ctx.fillStyle = '#55d8ff'; ctx.font = '900 10px ui-monospace, monospace';
+    ctx.fillText('SELECTED', x + w / 2, y + h - 7);
+  }
+  ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  if (!disabled) registerButton(x, y, w, h, id);
 }
 function star(cx, cy, r, filled) {
   ctx.beginPath();
@@ -1622,7 +1905,7 @@ function drawHUD() {
   }
   if (G.state === 'paused') overlayPaused();
   if (G.state === 'crashed') overlayCrashed();
-  if (G.state === 'finished') overlayFinished();
+  if (G.state === 'finished') overlayFinishForge();
   if (G.state === 'menu') drawMenu();
   if (G.settingsOpen) { uiButtonCount = 0; drawSettings(); }
   if (G.replayNotice) drawReplayNotice();
@@ -1727,36 +2010,157 @@ function overlayCrashed() {
   }
   ctx.restore(); ctx.textAlign = 'left';
 }
-function overlayFinished() {
-  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, cssW, cssH);
-  const hasGolden = GOLDEN_TAPES.has(G.levelIdx);
-  const w = Math.min(440, cssW - 24), h = Math.min(hasGolden ? 454 : 410, cssH - 24), { x, y } = panel(w, h);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#ffd23e'; ctx.font = '800 30px system-ui';
-  ctx.fillText(G.replayFailed ? STR.proofFailed : STR.levelComplete, cssW / 2, y + 48);
-  for (let i = 0; i < 3; i++) star(cssW / 2 + (i - 1) * 68, y + 104, 30, i < G.finishStars);
-  ctx.fillStyle = '#fff'; ctx.font = '700 40px ui-monospace, monospace'; ctx.fillText(fmt(G.finishTime), cssW / 2, y + 168);
-  ctx.font = '600 13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText(STR.yourTime + (G.flipBonus > 0 ? '   ·   ' + STR.flipsSaved + ' -' + G.flipBonus.toFixed(1) + 's' : ''), cssW / 2, y + 190);
-  ctx.fillStyle = '#8fe3ff'; ctx.font = '800 20px ui-monospace, monospace'; ctx.fillText(STR.score + ' ' + G.finishScore, cssW / 2, y + 222);
-  let ry = y + 244;
-  if (G.finishNewRecord) { ctx.fillStyle = '#8bff6b'; ctx.font = '800 16px system-ui'; ctx.fillText('★ ' + STR.newRecord, cssW / 2, ry); ry += 20; }
-  else if (G.finishRecordScore) { ctx.fillStyle = '#8bff6b'; ctx.font = '800 15px system-ui'; ctx.fillText('★ ' + STR.bestScore + ' ' + STR.score, cssW / 2, ry); ry += 20; }
-  if (G.replayMode) {
-    const golden = G.replaySource === 'golden';
-    ctx.fillStyle = G.replayVerified ? (golden ? '#ffd23e' : '#8bff6b') : '#ff6a4a'; ctx.font = '800 14px ui-monospace, monospace';
-    ctx.fillText(G.replayVerified ? '✓ ' + (golden ? STR.referenceVerified : STR.proofVerified)
-      : '⚠ ' + STR.proofFailed, cssW / 2, ry + 4);
-  } else if (G.replayRecorded) {
-    ctx.fillStyle = '#8fe3ff'; ctx.font = '800 14px ui-monospace, monospace';
-    ctx.fillText('◆ ' + STR.proofRecorded, cssW / 2, ry + 4);
+function finishReveal(start, duration = 0.22) {
+  if (reduced()) return 1;
+  return Math.max(0, Math.min(1, (G.finishTimer - start) / duration));
+}
+
+function finishActionColor(id) {
+  return { retry: '#315fd8', replay: '#6f43d6', next: '#ff5a3c',
+    menu: '#354052', golden: '#bb8612' }[id] || '#354052';
+}
+
+function drawFinishReceiptCell(x, y, w, h, label, value, color, emphasized = false) {
+  roundRect(x, y, w, h, 10);
+  ctx.fillStyle = emphasized ? 'rgba(85,216,255,0.12)' : 'rgba(255,255,255,0.055)'; ctx.fill();
+  ctx.lineWidth = emphasized ? 2 : 1;
+  ctx.strokeStyle = emphasized ? 'rgba(85,216,255,0.55)' : 'rgba(255,255,255,0.09)'; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(214,230,242,0.62)';
+  ctx.font = '900 9px ui-monospace, monospace'; ctx.fillText(label, x + w / 2, y + 17);
+  ctx.fillStyle = color;
+  ctx.font = `900 ${Math.max(16, Math.min(28, h * 0.36))}px ui-monospace, monospace`;
+  ctx.fillText(value, x + w / 2, y + h - 15);
+}
+
+function overlayFinishForge() {
+  const report = G.finishReport;
+  if (!report) return;
+  ctx.fillStyle = 'rgba(2,5,10,0.68)'; ctx.fillRect(0, 0, cssW, cssH);
+  const compact = cssW < 540;
+  const w = Math.min(660, cssW - 16);
+  const h = Math.min(compact ? 620 : 600, cssH - 16);
+  const x = (cssW - w) / 2, y = (cssH - h) / 2;
+  roundRect(x, y, w, h, compact ? 16 : 22);
+  const finishGradient = ctx.createLinearGradient(x, y, x + w, y + h);
+  finishGradient.addColorStop(0, 'rgba(7,13,20,0.97)');
+  finishGradient.addColorStop(1, 'rgba(20,25,38,0.96)');
+  ctx.fillStyle = finishGradient; ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = G.replayFailed ? '#ff6a4a' : 'rgba(85,216,255,0.62)'; ctx.stroke();
+  ctx.fillStyle = G.replayFailed ? '#ff6a4a' : '#55d8ff';
+  roundRect(x + 10, y + 9, w - 20, 5, 2.5); ctx.fill();
+
+  const headerY = y + (compact ? 34 : 40);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#ffd23e';
+  ctx.font = `900 ${compact ? 11 : 12}px ui-monospace, monospace`;
+  ctx.fillText(`FINISH FORGE  //  RUN ${String(report.level.number).padStart(2, '0')}`,
+    x + 18, headerY);
+  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(225,237,246,0.58)';
+  ctx.fillText(report.level.name.toUpperCase(), x + w - 18, headerY);
+
+  const starY = y + (compact ? 70 : 83), starGap = compact ? 53 : 66;
+  for (let index = 0; index < 3; index++) {
+    const reveal = finishReveal(0.12 + index * 0.22);
+    ctx.save(); ctx.globalAlpha = 0.25 + reveal * 0.75;
+    ctx.translate(cssW / 2 + (index - 1) * starGap, starY);
+    const scale = 0.78 + reveal * 0.22; ctx.scale(scale, scale);
+    ctx.beginPath(); ctx.arc(0, 0, compact ? 21 : 25, 0, Math.PI * 2);
+    ctx.fillStyle = index < report.stars ? 'rgba(255,210,62,0.15)' : 'rgba(255,255,255,0.04)'; ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = index < report.stars ? '#ffd23e' : 'rgba(255,255,255,0.12)'; ctx.stroke();
+    star(0, 0, compact ? 14 : 17, index < report.stars);
+    ctx.restore();
   }
+
+  const receiptAlpha = finishReveal(0.7, 0.28);
+  ctx.save(); ctx.globalAlpha = 0.2 + receiptAlpha * 0.8;
+  const innerX = x + (compact ? 12 : 18), innerW = w - (compact ? 24 : 36);
+  const timingY = y + (compact ? 101 : 120), timingH = compact ? 67 : 82;
+  const timingGap = compact ? 6 : 10, timingW = (innerW - timingGap * 2) / 3;
+  drawFinishReceiptCell(innerX, timingY, timingW, timingH,
+    'RAW CLOCK', fmt(report.timing.gross), '#ffffff');
+  drawFinishReceiptCell(innerX + timingW + timingGap, timingY, timingW, timingH,
+    'FLIP CREDIT', `-${fmt(report.timing.bonus)}`, '#8bff6b');
+  drawFinishReceiptCell(innerX + (timingW + timingGap) * 2, timingY, timingW, timingH,
+    'NET LOCK', fmt(report.timing.net), '#55d8ff', true);
+
+  const scoreY = timingY + timingH + (compact ? 8 : 12), scoreH = compact ? 82 : 102;
+  roundRect(innerX, scoreY, innerW, scoreH, 12); ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.09)'; ctx.stroke();
+  ctx.textAlign = 'left'; ctx.fillStyle = '#8fe3ff';
+  ctx.font = '900 9px ui-monospace, monospace'; ctx.fillText('SCORE RECEIPT', innerX + 11, scoreY + 16);
+  const rawItems = report.score.receipt.items;
+  const items = rawItems.length <= 3 ? rawItems : [rawItems[0], rawItems[1], {
+    label: 'OTHER', points: rawItems.slice(2).reduce((sum, item) => sum + item.points, 0),
+  }];
+  const scoreColumns = [...items, { label: 'TOTAL', points: report.score.total, total: true }];
+  const scoreColumnW = innerW / scoreColumns.length;
+  scoreColumns.forEach((item, index) => {
+    const cx = innerX + scoreColumnW * (index + 0.5);
+    ctx.textAlign = 'center'; ctx.fillStyle = item.total ? '#ffd23e' : 'rgba(214,230,242,0.55)';
+    ctx.font = `900 ${compact ? 7 : 9}px ui-monospace, monospace`;
+    ctx.fillText(item.label, cx, scoreY + (compact ? 35 : 42));
+    ctx.fillStyle = item.total ? '#ffd23e' : '#ffffff';
+    ctx.font = `900 ${compact ? 15 : 20}px ui-monospace, monospace`;
+    ctx.fillText(String(item.points).padStart(item.total ? 6 : 3, '0'),
+      cx, scoreY + (compact ? 62 : 74));
+  });
+  ctx.restore();
+
+  const statusY = y + (compact ? 270 : 335);
+  const previous = report.timing.previousBest;
+  let pbText = previous === null ? 'FIRST RECORD LOCKED' : `PB ${fmt(previous)}`;
+  if (report.timing.newRecord && previous !== null) {
+    pbText = `PB SHAVED ${(report.timing.deltaMs / 1000).toFixed(2)}s`;
+  } else if (!report.timing.newRecord && previous !== null && report.timing.deltaMs < 0) {
+    pbText += `  //  +${Math.abs(report.timing.deltaMs / 1000).toFixed(2)}s`;
+  }
+  const proofText = G.replayMode
+    ? (G.replayVerified
+      ? (G.replaySource === 'golden' ? STR.referenceVerified : STR.proofVerified)
+      : STR.proofFailed)
+    : (G.replayRecorded ? STR.proofRecorded : STR.proofMissing);
   ctx.textAlign = 'left';
-  if (hasGolden) btn(cssW / 2 - 67, y + h - 105, 134, 34, STR.goldRun, 'golden', '#bb8612');
-  const gap = 10, bw = (w - 60 - gap * 2) / 3;
-  btn(x + 20, y + h - 58, bw, 42, STR.retry, 'retry', '#3c6bff');
-  btn(x + 20 + bw + gap, y + h - 58, bw, 42, STR.replay, 'replay', '#6f43d6');
-  const last = G.levelIdx + 1 >= levels.length;
-  btn(x + 20 + (bw + gap) * 2, y + h - 58, bw, 42, last ? STR.menu : STR.next, last ? 'menu' : 'next', '#ff5a3c');
-  ctx.textAlign = 'left';
+  ctx.fillStyle = report.timing.newRecord ? '#8bff6b' : 'rgba(225,237,246,0.76)';
+  ctx.font = `900 ${compact ? 11 : 13}px ui-monospace, monospace`; ctx.fillText(pbText, innerX, statusY);
+  ctx.fillStyle = G.replayFailed ? '#ff6a4a' : '#8fe3ff';
+  ctx.font = `800 ${compact ? 9 : 11}px ui-monospace, monospace`;
+  ctx.fillText(`PROOF // ${proofText}`, innerX, statusY + (compact ? 22 : 25));
+  ctx.fillStyle = 'rgba(225,237,246,0.6)';
+  const routeText = report.nextRoute.available
+    ? `NEXT // ${String(report.nextRoute.index + 1).padStart(2, '0')} ${report.nextRoute.levelName.toUpperCase()}`
+    : 'NEXT // RELAY BOARD';
+  ctx.fillText(routeText, innerX, statusY + (compact ? 42 : 48));
+
+  const actions = report.actions;
+  const mainActions = actions.filter(action => action.id !== 'golden');
+  const goldenAction = actions.find(action => action.id === 'golden');
+  const actionGap = 8, useGrid = compact && mainActions.length >= 4;
+  const actionRows = useGrid ? 2 : 1, actionHeight = compact ? 48 : 52;
+  const actionAreaH = actionRows * actionHeight + (actionRows - 1) * actionGap;
+  const actionY = y + h - 12 - actionAreaH;
+  const actionCols = useGrid ? 2 : mainActions.length;
+  const actionW = (innerW - actionGap * (actionCols - 1)) / actionCols;
+  mainActions.forEach((action, index) => {
+    const row = useGrid ? Math.floor(index / actionCols) : 0;
+    const col = useGrid ? index % actionCols : index;
+    const reportIndex = actions.indexOf(action);
+    btn(innerX + col * (actionW + actionGap), actionY + row * (actionHeight + actionGap),
+      actionW, actionHeight, action.label, action.id, finishActionColor(action.id), {
+        disabled: !action.enabled,
+        selected: reportIndex === G.finishFocus,
+      });
+  });
+  if (goldenAction) {
+    const reportIndex = actions.indexOf(goldenAction);
+    const goldW = compact ? 118 : 142;
+    const goldY = actionY - (compact ? 54 : 60);
+    btn(x + w - (compact ? 12 : 18) - goldW, goldY, goldW, 44,
+      goldenAction.label, goldenAction.id, finishActionColor('golden'), {
+        selected: reportIndex === G.finishFocus,
+      });
+  }
+  ctx.textAlign = 'left'; ctx.globalAlpha = 1;
 }
 
 // menu / level select
@@ -1854,12 +2258,30 @@ function doUI(id) {
   if (id === 'mute') { Audio2.toggle(); return; }
   if (id === 'pause') { togglePause(); return; }
   if (id === 'resume') { G.state = 'playing'; return; }
-  if (id === 'retry') { G.settingsOpen = false; restartLevel(); return; }
+  if (id === 'retry') {
+    G.settingsOpen = false;
+    const resolved = resolveResultAction('retry', {
+      levels, currentIndex: G.levelIdx, unlocked: boundedUnlocked(),
+    });
+    const preservePlayback = G.state !== 'finished' && G.replayMode;
+    if (resolved.ok) startLevel(resolved.index, preservePlayback
+      ? { replayToken: G.replayToken, replaySource: G.replaySource } : undefined);
+    else routeNotice(resolved.reason);
+    return;
+  }
   if (id === 'replay') {
     const token = G.replayToken || save.replays[G.levelIdx];
-    if (token) startLevel(G.levelIdx, { replayToken: token,
-      replaySource: token === G.replayToken ? G.replaySource : 'saved' });
-    else G.replayNotice = { message: STR.proofMissing, detail: STR.proofMissing, life: 3.5 };
+    const source = token === G.replayToken ? (G.replaySource || 'saved') : 'saved';
+    const resolved = resolveResultAction('replay', {
+      levels, currentIndex: G.levelIdx, unlocked: boundedUnlocked(),
+      replayToken: token, replaySource: source,
+    });
+    if (resolved.ok) startLevel(resolved.index, { replayToken: resolved.token,
+      replaySource: resolved.source });
+    else {
+      G.replayNotice = { message: STR.proofMissing, detail: STR.proofMissing, life: 3.5 };
+      announce(STR.proofMissing);
+    }
     return;
   }
   if (id === 'golden') {
@@ -1870,8 +2292,17 @@ function doUI(id) {
   }
   if (id === 'menu') { G.settingsOpen = false; G.state = 'menu'; G.running = false;
     G.menuWorld = Math.max(0, worlds.indexOf(G.level?.world || worlds[0]));
-    Audio2.stopEngine(); Audio2.setMusicState('menu'); return; }
-  if (id === 'next') { startLevel(Math.min(G.levelIdx + 1, levels.length - 1)); return; }
+    G.finishFocus = -1; G.restartQueued = false; hideSemanticResults(); clearControls('menu'); Audio2.resetRun();
+    Audio2.setMusicState('menu'); announce(STR.levelSelect); return; }
+  if (id === 'next') {
+    const resolved = resolveResultAction('next', {
+      levels, currentIndex: G.levelIdx, unlocked: boundedUnlocked(),
+    });
+    if (resolved.ok) startLevel(resolved.index);
+    else if (resolved.reason === 'campaign-complete') doUI('menu');
+    else routeNotice(resolved.reason);
+    return;
+  }
   if (id === 'gear') { G.settingsOpen = true; return; }
   if (id === 'set_close') { G.settingsOpen = false; return; }
   if (id === 'set_music_dn') { SETTINGS.music = clamp01(SETTINGS.music - 0.1); persist(); Audio2.applyMusicGains(); return; }
@@ -1900,13 +2331,15 @@ function doUI(id) {
   }
   if (id === 'install') { const d = window.__deferredInstall; if (d) { d.prompt(); window.__deferredInstall = null; } return; }
   if (id.startsWith('world')) { G.menuWorld = Math.max(0, Math.min(worlds.length - 1, parseInt(id.slice(5), 10) || 0)); return; }
-  if (id.startsWith('lvl')) { startLevel(parseInt(id.slice(3), 10)); return; }
+  const levelMatch = /^lvl(\d+)$/.exec(id);
+  if (levelMatch) { startLevel(Number(levelMatch[1]), { requireUnlocked: true }); return; }
 }
 
 // ---------------------------------------------------------------- loop ------
 const STEP = 1 / 60, STEP_MS = STEP * 1000;
 const MAX_FIXED_TICKS_PER_FRAME = 5, MAX_BACKLOG_TICKS = 6;
 let acc = 0, last = performance.now();
+resetLoopClock = () => { acc = 0; last = performance.now(); };
 const devParams = new URLSearchParams(location.search), dev = devParams.has('dev');
 const captureMode = dev && devParams.has('capture');
 const devAutoplay = dev && devParams.has('autoplay');
@@ -1964,10 +2397,12 @@ function frame(now) {
   const dtMs = Math.min(100, rawDtMs);
   let fixedTicks = 0, backlogTicks = Math.floor(acc / STEP_MS), droppedMs = 0;
   if (G.captureFrozen) {
-    render(); recordFrameTelemetry(rawDtMs, 0, backlogTicks, 0, clampedMs);
+    recordFrameTelemetry(rawDtMs, 0, backlogTicks, 0, clampedMs);
     updateDevPanel(now); return;
   }
-  if (gamepadConnected) inputState.pollGamepads(navigator.getGamepads?.() || []);
+  const gamepads = navigator.getGamepads?.() || [];
+  if (gamepadConnected) inputState.pollGamepads(gamepads);
+  handleUiEdges(uiInput.poll(gamepads));
   // hitstop: freeze the sim, keep rendering (a punchy impact beat)
   if (G.hitstop > 0) {
     G.hitstop -= dtMs / 1000; render();
@@ -1997,6 +2432,9 @@ function frame(now) {
     G.replayNotice.life -= dtMs / 1000;
     if (G.replayNotice.life <= 0) G.replayNotice = null;
   }
+  if (G.state === 'finished') {
+    G.finishTimer = reduced() ? 10 : Math.min(10, G.finishTimer + dtMs / 1000);
+  }
   render();
   recordFrameTelemetry(rawDtMs, fixedTicks, backlogTicks, droppedMs, clampedMs);
   updateDevPanel(now);
@@ -2014,11 +2452,25 @@ function drawVignette() {
   ctx.fillStyle = vigGrad; ctx.fillRect(0, 0, cssW, cssH);
 }
 function render() {
-  drawSky();
-  if (G.state !== 'menu' && G.level) { const scale = worldTransform(); drawWorld(scale); }
-  drawVignette();
-  drawHUD();
-  if (G.flash > 0) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = 'rgba(255,255,255,' + (G.flash * 0.55) + ')'; ctx.fillRect(0, 0, cssW, cssH); }
+  // Treat every renderer as an isolated pass. Complex tracks intentionally
+  // use clips/compositing; a missed restore must never crop the HUD or poison
+  // the next frame.
+  ctx.save(); drawSky(); ctx.restore();
+  if (G.state !== 'menu' && G.level) {
+    ctx.save();
+    const scale = worldTransform();
+    drawWorld(scale);
+    ctx.restore();
+  }
+  ctx.save(); drawVignette(); ctx.restore();
+  ctx.save(); drawHUD(); ctx.restore();
+  if (G.flash > 0) {
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = 'rgba(255,255,255,' + (G.flash * 0.55) + ')';
+    ctx.fillRect(0, 0, cssW, cssH);
+    ctx.restore();
+  }
 }
 
 // ---------------------------------------------------------------- boot ------
@@ -2028,7 +2480,14 @@ Promise.all([loadAssets(), loadGoldenTapes()]).then(() => {
   if (patDirt) patScale(patDirt, IMG.dirt);
   if (patRock) patScale(patRock, IMG.rock);
   document.getElementById('boot').style.display = 'none';
-  if (devParams.has('level')) startLevel(devLevel);
+  if (devParams.has('finish')) stageDevFinish({
+    levelIndex: devLevel,
+    reducedMotion: devParams.has('reduced'),
+    presentationTime: devParams.has('presentation') ? Number(devParams.get('presentation')) : undefined,
+    previousBestTime: devParams.has('first') ? null : undefined,
+    freeze: captureMode,
+  });
+  else if (devParams.has('level')) startLevel(devLevel);
   else { G.state = 'menu'; Audio2.setMusicState('menu'); }
   requestAnimationFrame(frame);
 });
@@ -2096,6 +2555,111 @@ function runDevToEnd(maxTicks = 60 * 120) {
   return stepDevTicks(maxTicks);
 }
 
+function finishSnapshot() {
+  const report = G.finishReport ? JSON.parse(JSON.stringify(G.finishReport)) : null;
+  return Object.freeze({
+    state: G.state,
+    levelIndex: G.levelIdx,
+    finishTimer: G.finishTimer,
+    reducedMotion: reduced(),
+    report,
+    focusedAction: report?.actions?.[G.finishFocus]?.id || null,
+    replayRecorded: G.replayRecorded,
+    replayMode: G.replayMode,
+    replayVerified: G.replayVerified,
+    replayFailed: G.replayFailed,
+  });
+}
+
+function uiSnapshot() {
+  const semantic = semanticResultsActions
+    ? [...semanticResultsActions.querySelectorAll('button')].map(button => ({
+      id: button.dataset.action || '', label: button.textContent || '', disabled: button.disabled,
+    })) : [];
+  return Object.freeze({
+    buttons: Object.freeze(uiButtons.slice(0, uiButtonCount).map(button => Object.freeze({ ...button }))),
+    semantic: Object.freeze(semantic.map(button => Object.freeze(button))),
+    focusIndex: G.finishFocus,
+    focusedAction: G.finishReport?.actions?.[G.finishFocus]?.id || null,
+    viewport: Object.freeze({ width: cssW, height: cssH, dpr,
+      canvasWidth: canvas.width, canvasHeight: canvas.height }),
+  });
+}
+
+function runtimeSnapshot() {
+  return Object.freeze({
+    state: G.state,
+    levelIndex: G.levelIdx,
+    session: G._runSessionReady ? snapshotRunSession(G) : null,
+    presentation: Object.freeze({
+      shake: G.shake, flash: G.flash, slow: G.slow, hitstop: G.hitstop,
+      trackT: G.trackT, engineGear: G.engineGear, finishTimer: G.finishTimer,
+      finishFocus: G.finishFocus, restartQueued: G.restartQueued,
+      ragdoll: !!G.ragdoll, crashWorld: !!G.crashWorld,
+      crashImpacts: G.crashImpacts.length, settingsOpen: G.settingsOpen,
+    }),
+    effects: effectPoolSnapshot(),
+    input: inputState.getTelemetry(),
+    uiInput: uiInput.inspect(),
+    audio: Audio2.inspect(),
+    loop: Object.freeze({ accumulatorMs: acc, lastFrameAt: last }),
+  });
+}
+
+function stageDevFinish(options = {}) {
+  if (!dev) return { ok: false, reason: 'development mode required' };
+  const levelIndex = Math.max(0, Math.min(levels.length - 1,
+    Math.trunc(Number(options.levelIndex ?? options.level ?? 0) || 0)));
+  G.captureFrozen = false;
+  SETTINGS.reducedMotion = options.reducedMotion === true;
+  if (!startLevel(levelIndex)) return { ok: false, reason: 'level start failed' };
+  const elapsed = Math.max(0, Number.isFinite(options.elapsed) ? options.elapsed : 18.75);
+  const flipBonus = Math.max(0, Math.min(elapsed,
+    Number.isFinite(options.flipBonus) ? options.flipBonus : 1.5));
+  const scoreParts = {
+    flip: Math.max(0, Math.trunc(Number(options.trickScore ?? 900) || 0)),
+    landingPerfect: Math.max(0, Math.trunc(Number(options.flowScore ?? 420) || 0)),
+    nearMiss: Math.max(0, Math.trunc(Number(options.riskScore ?? 180) || 0)),
+  };
+  resetScoreLedger(G.scoreLedger);
+  for (const [type, points] of Object.entries(scoreParts)) {
+    if (points > 0) recordScoreEvent(G.scoreLedger, { type, points });
+  }
+  G.elapsed = elapsed; G.flipBonus = flipBonus;
+  G.score = G.scoreLedger.total; G.finishScore = G.score;
+  G.finishTime = Math.max(0, elapsed - flipBonus);
+  G.finishStars = Math.max(0, Math.min(3, Math.trunc(Number(options.stars ?? 3) || 0)));
+  G.state = 'finished'; G.running = false; G.finishTimer = 0;
+  G.replayMode = false; G.replayPlayback = null; G.replaySource = null;
+  G.replayRecorder = null; G.replayVerified = false; G.replayFailed = null;
+  const reference = GOLDEN_TAPES.get(levelIndex);
+  G.replayToken = options.replayAvailable === false ? null : (reference?.token || null);
+  G.replayRecorded = !!G.replayToken;
+  save.unlocked = Math.max(boundedUnlocked(), Math.min(levels.length,
+    Math.trunc(Number(options.unlocked ?? levelIndex + 2) || 1)));
+  const previousTime = options.previousBestTime === null ? null
+    : (Number.isFinite(options.previousBestTime) ? options.previousBestTime : G.finishTime + 0.84);
+  const previousScore = options.previousBestScore === null ? null
+    : (Number.isFinite(options.previousBestScore) ? options.previousBestScore : Math.max(0, G.score - 120));
+  finalizeFinishReport(options.recordEligible !== false, { time: previousTime, score: previousScore });
+  G.finishTimer = reduced() ? 10 : Math.max(0, Math.min(10,
+    Number.isFinite(options.presentationTime) ? options.presentationTime : 2));
+  if (options.freeze === true) G.captureFrozen = true;
+  render();
+  return Object.freeze({ ok: true, ...finishSnapshot(), ui: uiSnapshot() });
+}
+
+function stepFinishPresentationTicks(count = 1) {
+  if (!dev || G.state !== 'finished') return { ok: false, reason: 'finished development scene required' };
+  const ticks = Math.max(0, Math.min(600, Math.trunc(Number(count) || 0)));
+  for (let index = 0; index < ticks; index++) {
+    G.finishTimer = reduced() ? 10 : Math.min(10, G.finishTimer + STEP);
+    updateParticles(STEP);
+  }
+  render();
+  return { ok: true, ticks, finishTimer: G.finishTimer };
+}
+
 function resetGamePerformance() {
   resetPerformanceMetrics(performanceMetrics);
   recordPerformanceViewport(performanceMetrics, cssW, cssH, dpr, viewportRotation());
@@ -2116,7 +2680,9 @@ function effectPoolSnapshot() {
 // test hook (used by the screenshot harness / dev console)
 window.__moto = { G, startLevel, restartLevel, levels, SETTINGS,
   stepTicks: stepDevTicks, runToEnd: runDevToEnd,
-  stageCrash: stageDevCrash, freezePresentation: freezeDevPresentation,
+  stageCrash: stageDevCrash, stageFinish: stageDevFinish,
+  stepFinishPresentationTicks, finishSnapshot, uiSnapshot, runtimeSnapshot,
+  freezePresentation: freezeDevPresentation,
   renderNow: () => { if (dev) render(); return dev; },
   setCollisionDebug: value => { if (dev) collisionDebug = value === true; return collisionDebug; },
   input: inputState,

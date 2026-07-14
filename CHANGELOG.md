@@ -2,6 +2,58 @@
 
 All notable Moto Rush X3 changes are recorded here so development can resume without reconstructing old decisions from source code. Dates use YYYY-MM-DD.
 
+## [1.8.1] — 2026-07-14 — Fast Failure, Great Finish (unmerged release candidate)
+
+This candidate completes the local implementation pass for U06 with the original **Finish Forge** run receipt, exact result arithmetic, safe route resolution, input parity, accessibility semantics, and explicit presentation reset ownership. Local deterministic, browser, Gold, route, performance, crash-regression, and four-image capture gates pass; the final commit, draft-PR hosted gate, physical-device coverage, and production deployment remain `pending` until recorded.
+
+### Added
+
+- A DOM-free `finish-flow.js` policy for score-ledger reconciliation, canonical millisecond timing, minute-safe formatting, PB/tie decisions, legal next-route resolution, action construction, enabled-focus wrap, and mutation-free result action resolution.
+- The code-native **Finish Forge** Canvas receipt with gross clock, flip credit, net lock, itemized score, star rivets, PB delta, proof state, next-route status, and responsive Retry/Replay/Next/Menu/Gold Run actions.
+- A DOM-free `ui-input.js` adapter for standard gamepad D-pad/stick/A/B rising edges, press/release hysteresis, keyboard UI mapping, held-input suppression, and bounded controller snapshots.
+- A semantic result dialog that mirrors the Canvas title, summary, actions, disabled state, focus, and live announcement for assistive technology while leaving visual composition code-native.
+- Development hooks and a deterministic double-capture harness for four fixed desktop, focused-action, mobile DPR 2, and Reduced Motion Finish Forge scenes.
+- A dedicated real-browser result-flow gate covering canonical receipt/semantic text, 44 px target geometry, keyboard, touch, standard fake gamepad, held-A suppression, missing proof, locked/missing Next, Reduced Motion, reset cleanup, and callback-work budgets.
+- Focused finish-policy, UI-input, release-metadata, star-threshold, exact-finish-event, and manual/automatic retry-boundary regression tests.
+
+### Changed
+
+- Build/package/offline-cache identity advances to `1.8.1`; replay schema remains `1`, authoritative physics remains `physics-4`, course identity remains `course-4`, and the save key remains `motoRushX3.save.v1`.
+- The authoritative session now exports validated inclusive star classification and an exact finish event; the browser consumes those values instead of maintaining a second star/finish formula.
+- Result Retry starts a fresh live run, while Replay remains a separate proof-backed route. Next is omitted unless the immediate catalog entry exists and is unlocked; Menu remains a safe exit.
+- Time records compare canonical integer milliseconds, preventing sub-millisecond noise from creating a visible zero-millisecond PB and carrying hundredth rounding correctly through minute boundaries.
+- Result controls accept Arrow/WASD navigation, Enter/Space confirmation, Escape/gamepad B back, pointer/touch activation, and standard gamepad edge input. A simultaneous direction plus confirm edge changes focus without activating the newly focused action.
+- The document declares English, the Canvas exposes an application label and keyboard focus, semantic results use a real dialog/button tree, and the viewport no longer disables browser zoom.
+- Reduced Motion reveals the complete receipt immediately and suppresses finish confetti while preserving report content, focus, and every legal action.
+- Repository Gold tokens were refreshed for required build compatibility only; non-token outcomes remain identical to v1.8.0.
+
+### Fixed
+
+- A held gameplay throttle or gamepad A press can no longer auto-dismiss a newly opened results screen.
+- A missing player proof cannot trigger Replay, and a missing, locked, final, or malformed next route cannot start or clamp to the wrong course.
+- Disabled actions are skipped by keyboard/gamepad focus wrap and are absent from Canvas hit targets while remaining exposed as disabled in the semantic dialog.
+- Finish score rows must add exactly to the authoritative score; mismatches fail instead of rendering a misleading receipt.
+- Result transitions clear finish timers/focus, semantic controls, live announcements, pooled effects/tracks, camera/crash state, queued restart state, UI edges, scheduled audio timers, and active synthesized effect sources.
+- Save records/unlocks are normalized before use, preventing malformed local data from exposing invalid routes or record comparisons.
+
+### Verified locally
+
+- **Asset/offline and metadata:** syntax, references, literal precache, package/runtime/manifest/cache identity, import graph, Gold identity, and save compatibility pass for `1.8.1`.
+- **Deterministic systems:** the expanded finish, UI-input, run-session, release-metadata, crash, replay, collision, input, effect, and performance suites pass.
+- **Physics/routes:** all 16 authored levels complete through the existing stability gate.
+- **Gold Runs:** all 16 `1.8.1` / schema `1` / `physics-4` / `course-4` recovery tapes replay twice in clean contexts—32 exact passes with no divergence or non-token v1.8.0 outcome change.
+- **Ordinary browser profiles:** callback-work p95 was 1.10 ms desktop and 0.90 ms mobile DPR 2, below 8/12 ms budgets, with the interruption/layout matrix green.
+- **Crash browser profiles:** desktop TNT, mobile DPR 2 saw, and static Reduced Motion profiles retain the 17-part/contact/frozen-review/retry contract; final p95 was 3.10 ms desktop and 1.70 ms mobile.
+- **Finish Forge browser profiles:** Chrome 150 desktop produced 123 samples at 0.70 ms p95 with native semantic Tab/Enter, held-repeat suppression, keyboard shortcuts, and standard-gamepad flows; mobile DPR 2 produced 127 samples at 0.60 ms p95 plus five non-overlapping 320 × 568 targets and real touch-center Retry. Both exposed five semantic actions and five enabled 44 px-or-larger Canvas targets in the full scene, with no page/console/request/HTTP errors.
+- **Aggregate:** final `npm test` passed 3 asset checks, 127 deterministic systems, 16 routes, 32 Gold replays, and all ordinary/crash/result browser profiles in 334.1 seconds.
+- **Visual QA:** four real Canvas scenes were generated twice in independent clean contexts and matched at zero changed pixels and zero maximum channel delta before full-resolution inspection.
+
+### Pending before promotion
+
+- Record the final gameplay commit, draft pull request, hosted Actions run, and correctly skipped publish job.
+- Smoke physical keyboard, multitouch, real gamepad, screen-reader/browser combinations, low-end performance, and finish/crash boundary holds.
+- After review and eligible merge only, verify visible `v1.8.1`, Pages publish, service-worker replacement, installability, clean-cache reload, and offline relaunch.
+
 ## [1.8.0] — 2026-07-14 — Crash Theater (unmerged release candidate)
 
 This candidate advances U05 with a presentation-only crash overhaul. The complete local release gate, four-image visual record, and draft-PR hosted gate pass; physical-device coverage and production deployment remain `pending`.

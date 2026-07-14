@@ -18,7 +18,7 @@ export const STR = {
   flipN: 'FLIP x',
   bonus: '-0.5s',
   crash: 'CRASHED!',
-  tapRetry: 'Tap to respawn',
+  tapRetry: 'Press / tap to respawn',
   levelComplete: 'LEVEL COMPLETE',
   yourTime: 'TIME',
   flipsSaved: 'FLIP BONUS',

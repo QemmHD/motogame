@@ -7,6 +7,7 @@ import {
   finishTimeForRun,
   initializeRunSession,
   snapshotRunSession,
+  starsForLevel,
   stepCrashedRun,
   stepPlayingRun,
 } from '../public/run-session.js';
@@ -20,6 +21,7 @@ function runToFinish(level, levelIndex = 0, maxTicks = 6_000) {
   initializeRunSession(target, level, levelIndex);
   const trace = [];
   let crashes = 0;
+  let finish = null;
   for (let tick = 0; tick < maxTicks && target.state !== 'finished'; tick++) {
     const events = target.state === 'playing'
       ? stepPlayingRun(target, gas, DT)
@@ -32,8 +34,9 @@ function runToFinish(level, levelIndex = 0, maxTicks = 6_000) {
       score.total,
     ]);
     if (events.crash) crashes++;
+    if (events.finish) finish = events.finish;
   }
-  return { target, trace, crashes };
+  return { target, trace, crashes, finish };
 }
 
 function crashFixture() {
@@ -115,14 +118,34 @@ function manualRetryScript(level) {
 
 test('a clean Canyon Run completion produces an authoritative finish', () => {
   const level = buildLevels()[0];
-  const { target, crashes } = runToFinish(level, 0);
+  const { target, crashes, finish } = runToFinish(level, 0);
   assert.equal(target.state, 'finished');
   assert.equal(crashes, 0);
   assert.equal(target.running, false);
   assert.equal(target.finishTime, finishTimeForRun(target));
   assert.equal(target.finishScore, target.score);
+  assert.deepEqual(finish, {
+    time: target.finishTime,
+    score: target.finishScore,
+    stars: target.finishStars,
+    elapsed: target.elapsed,
+    flipBonus: target.flipBonus,
+    tick: target.sessionTick,
+  });
   assert.ok(target.finishTime > 0 && target.finishTime < 30);
   assert.ok(target.finishStars >= 0 && target.finishStars <= 3);
+});
+
+test('star thresholds are inclusive, ordered, and owned by the run session', () => {
+  const level = { star: [18, 25, 34] };
+  assert.equal(starsForLevel(level, 18), 3);
+  assert.equal(starsForLevel(level, 18.001), 2);
+  assert.equal(starsForLevel(level, 25), 2);
+  assert.equal(starsForLevel(level, 25.001), 1);
+  assert.equal(starsForLevel(level, 34), 1);
+  assert.equal(starsForLevel(level, 34.001), 0);
+  assert.equal(starsForLevel({ star: [25, 18, 34] }, 10), 0);
+  assert.equal(starsForLevel({ star: [18, NaN, 34] }, 10), 0);
 });
 
 test('Vector Weave completes through all three authoritative Kinetic Looms', () => {
@@ -191,6 +214,22 @@ test('the 1.85 second crash timer auto-respawns on the same fixed tick', () => {
   assert.ok(respawn);
   assert.equal(target.state, 'playing');
   assert.ok(Math.abs(target.elapsed - elapsedAtCrash - crashTicks * DT) < 1e-10);
+});
+
+test('manual retry wins exactly once on the automatic retry boundary', () => {
+  const target = {};
+  initializeRunSession(target, crashFixture(), 91);
+  for (let tick = 0; tick < 600 && target.state === 'playing'; tick++) {
+    stepPlayingRun(target, gas, DT);
+  }
+  assert.equal(target.state, 'crashed');
+  target.crashTimer = DT;
+  const events = stepCrashedRun(target, { restart: true }, DT);
+  assert.ok(events.respawn);
+  assert.equal(events.stateBefore, 'crashed');
+  assert.equal(events.stateAfter, 'playing');
+  assert.equal(target.state, 'playing');
+  assert.equal(target.crashTimer, 0);
 });
 
 test('crash presentation reasons are natural and detached from authoritative session state', () => {

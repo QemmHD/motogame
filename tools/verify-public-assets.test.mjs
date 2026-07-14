@@ -21,7 +21,8 @@ test('critical gameplay modules and bike art are explicit offline dependencies',
   const precache = new Set(parsePrecacheManifest(serviceWorker));
   for (const required of ['./logic.js', './rules.js', './replay.js', './kinematics.js',
     './force-zones.js', './ragdoll.js', './run-session.js', './debug-proxies.js', './effect-pool.js',
-    './input-state.js', './perf-metrics.js', './assets/bike_body.png']) {
+    './input-state.js', './finish-flow.js', './ui-input.js', './perf-metrics.js',
+    './assets/bike_body.png']) {
     assert.ok(precache.has(required), `${required} must remain in PRECACHE`);
   }
 });

@@ -14,9 +14,9 @@
 <p align="center">
   <a href="https://qemmhd.github.io/motogame/"><strong>PLAY THE CURRENT LIVE BUILD</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="docs/releases/v1.8.0.md">v1.8 update</a>
+  <a href="docs/releases/v1.8.1.md">v1.8.1 update</a>
   &nbsp;&middot;&nbsp;
-  <a href="docs/releases/v1.7.0.md">v1.7 archive</a>
+  <a href="docs/releases/v1.8.0.md">v1.8 archive</a>
   &nbsp;&middot;&nbsp;
   <a href="ROADMAP.md">30-update roadmap</a>
   &nbsp;&middot;&nbsp;
@@ -24,17 +24,33 @@
 </p>
 
 <p align="center">
-  <img alt="v1.8.0 Crash Theater candidate" src="https://img.shields.io/badge/release-v1.8.0%20Crash%20Theater-ff5a3c">
+  <img alt="v1.8.1 Fast Failure Great Finish candidate" src="https://img.shields.io/badge/release-v1.8.1%20Finish%20Forge-ff5a3c">
   <img alt="16 courses in 3 worlds" src="https://img.shields.io/badge/courses-16%20in%203%20worlds-2764d9">
   <img alt="16 verified Gold Runs" src="https://img.shields.io/badge/Gold%20Runs-16%2F16-ffd23e">
-  <img alt="108 deterministic system tests" src="https://img.shields.io/badge/system%20tests-108%2F108-2b9f71">
+  <img alt="expanded deterministic system gate" src="https://img.shields.io/badge/systems-expanded%20gate%20passing-2b9f71">
   <img alt="offline-ready PWA" src="https://img.shields.io/badge/PWA-offline--ready-6c52b8">
-  <a href="https://github.com/QemmHD/motogame/actions/runs/29319685056"><img alt="v1.8 hosted gate passing" src="https://img.shields.io/badge/hosted%20gate-passing-2b9f71"></a>
+  <img alt="v1.8.1 hosted gate pending" src="https://img.shields.io/badge/v1.8.1%20hosted%20gate-pending-8a8f98">
 </p>
 
 ---
 
-## Crash Theater gallery
+## Finish Forge gallery
+
+<p align="center">
+  <img src="docs/screenshots/v1.8.1/update-v181-finish-forge-hero.png" alt="Moto Rush X3 Finish Forge run receipt with exact time, score, stars, proof, and actions" width="900">
+</p>
+
+| Visible action focus | Static Reduced Motion receipt |
+|:---:|:---:|
+| ![Finish Forge focus rail on an enabled result action](docs/screenshots/v1.8.1/update-v181-focused-action.png) | ![Immediately complete Finish Forge under Reduced Motion](docs/screenshots/v1.8.1/update-v181-reduced-motion.png) |
+
+<p align="center">
+  <img src="docs/screenshots/v1.8.1/update-v181-mobile-finish.png" alt="Finish Forge at 390 by 844 and DPR 2" width="300">
+</p>
+
+All four captures are from the real v1.8.1 candidate Canvas, not concept art. Each fixed scene rendered twice in independent clean browser contexts with zero changed pixels and zero maximum channel delta in the recorded pass. They do not claim the public URL already serves v1.8.1.
+
+### Preserved v1.8 Crash Theater gallery
 
 <p align="center">
   <img src="docs/screenshots/v1.8/update-v18-crash-hero.png" alt="Moto Rush X3 17-part Splitline Crash Theater scene" width="900">
@@ -68,7 +84,7 @@ All four deterministic Canvas captures were inspected at full resolution on 2026
 
 Moto Rush X3 is a browser-first 2D motorcycle game about carrying momentum through hand-built terrain. Its bike has physical wheels, suspension, lean, airborne rotation, graded landings, crash recovery, and distinct surface response. Every course offers readable safe ground, faster stunt lines, and deterministic machinery that rewards timing without replacing rider skill.
 
-The **v1.8.0 Crash Theater** candidate turns failure into a readable stunt moment. A code-native **Splitline** bike-and-rider model separates into a deterministic 17-part rig, reacts to ten authored crash causes, contacts detached terrain and frozen platform tops, and reports bounded impact beats for seeded sparks, dust, sound, haptics, camera, and the crash card. The complete scene remains presentation-only: checkpoint, score, hazard, platform, timer, and replay authority stay unchanged.
+The **v1.8.1 Fast Failure, Great Finish** candidate makes both ends of a run readable. A code-native **Splitline** bike-and-rider model turns failure into a deterministic 17-part Crash Theater, while the new **Finish Forge** turns success into an exact run receipt with gross time, flip credit, net time, itemized score, stars, PB delta, proof state, and safe Retry/Replay/Next/Menu/Gold Run actions. Both presentations stay outside authoritative physics and proof state.
 
 ### What makes it ours
 
@@ -85,13 +101,38 @@ The **v1.8.0 Crash Theater** candidate turns failure into a readable stunt momen
 - **One authoritative run session** shared by browser play and deterministic tests for bike physics, hazards, moving ground, scoring, checkpoint recovery, crashes, and finishes.
 - **Reactive solid platforms** with swept top collision, stable bike carry, bounded inherited velocity, and sensor-triggered local timelines.
 - **Crash Theater** with an original 17-part Splitline bike-and-rider rig, ten cause profiles, swept terrain/deck contact, bounded impact telemetry, and a static Reduced Motion alternative.
+- **Finish Forge** with exact authoritative time/score receipts, PB and tied-record comparison, guarded progression routes, five explicit actions, semantic dialog parity, and an instant Reduced Motion state.
 - **Last-run player proofs** stored locally and clearly rejected when missing, damaged, oversized, level-mismatched, or version-incompatible.
 - **Five-band engine response** driven by road speed, load, grounding, and throttle, with landing and stunt audio.
 - **Keyboard, Pointer Event, touch, and gamepad input**, including simultaneous controls, interruption cleanup, remappable command metadata, left-handed touch layout, haptics, and reduced motion.
 - **Installable offline PWA** with a literal, versioned, test-audited service-worker cache.
 - **Local progression** for unlocks, stars, best time, best score, settings, and the most recent completed proof per course.
 
-## What is new in v1.8
+## What is new in v1.8.1
+
+### One authoritative finish receipt
+
+The DOM-free finish policy accepts the elapsed time, flip credit, finish time, score, and stars already produced by the fixed-step session. It converts time to canonical milliseconds, requires gross minus credit to reconcile with net, and requires every score event to add exactly to the authoritative score. Minute-boundary formatting and personal-best comparisons therefore cannot drift from stored results or invent a zero-millisecond record.
+
+### Five clear ways forward
+
+Retry starts a fresh live run. Replay is separately proof-backed and remains visibly disabled when a compatible player tape is missing. Next exists only when the immediate catalog entry is playable and unlocked; it cannot clamp to the last course, skip missing content, or advance from a malformed current route. Menu is always safe, and Gold Run appears when the repository reference is available.
+
+Arrow keys/WASD, Enter/Space, Escape, standard gamepad D-pad/stick/A/B, pointer, and real touch share the same focus/action policy. Held gamepad controls create no repeat or accidental dismissal edges. Every enabled target is at least 44 × 44 CSS pixels and remains inside the 320 × 568 minimum layout.
+
+### Accessible, responsive presentation
+
+Finish Forge is drawn from Canvas primitives in an original forged-steel and signal-light language. A semantic dialog mirrors its title, exact result summary, disabled state, and buttons; a live region announces completion; the Canvas is keyboard-focusable and browser zoom is not disabled. Reduced Motion reveals the complete receipt immediately and omits confetti without removing result information.
+
+### Clean handoff to the next run
+
+Every result route clears finish focus/timers, semantic controls, announcements, pooled effects and tracks, camera/crash state, pending restart state, UI-input edges, scheduled audio, and active synthesized effect sources. Save records and unlock counts are normalized on read while the existing save key and field meanings remain compatible.
+
+The v1.8.1 local gate passes 3 asset checks, 127 deterministic systems, all 16 physics routes, 32 exact Gold replays, ordinary desktop/mobile performance, three Crash Theater regression profiles, and a dedicated Finish Forge browser matrix in 334.1 seconds. Ordinary callback-work p95 is 1.10 ms desktop and 0.90 ms mobile DPR 2. Chrome 150 Finish Forge recorded 123 desktop callbacks at 0.70 ms p95 and 127 mobile DPR 2 callbacks at 0.60 ms p95, plus native semantic Tab/Enter, repeated-key suppression, keyboard shortcuts, standard fake-gamepad, 320 × 568 geometry, and actual touch-center Retry coverage. Four fixed Canvas scenes rendered twice with zero pixel/channel disagreement. The final draft-PR hosted gate, physical-device/input/assistive-technology smoke, and production Pages/cache/install/offline checks remain pending.
+
+Read the [v1.8.1 release record](docs/releases/v1.8.1.md), [project pickup state](docs/PROJECT_STATE.md), or [Finish Forge capture record](docs/screenshots/v1.8.1/README.md).
+
+## Crash Theater foundation from v1.8
 
 ### Splitline crash rig
 
@@ -203,14 +244,15 @@ npm ci
 npm test
 ```
 
-The v1.8 candidate gate covers:
+The v1.8.1 candidate gate covers:
 
 - 3 asset and offline subtests;
-- 108 deterministic system subtests;
+- the expanded deterministic system suite, including finish policy, UI edges, exact session finishes/stars, release metadata, and every preserved subsystem;
 - all 16 authored physics and rules routes;
 - all 16 Gold Runs replayed twice in clean browser contexts, for 32 replay passes;
 - 2 repeatable ordinary browser performance/input profiles: desktop and mobile DPR 2;
-- 3 dedicated crash-browser profiles: desktop TNT, mobile DPR 2 saw, and Reduced Motion crusher.
+- 3 dedicated crash-browser profiles: desktop TNT, mobile DPR 2 saw, and Reduced Motion crusher;
+- 2 strict Finish Forge browser profiles with keyboard, touch, standard gamepad, semantic, route-safety, target-geometry, Reduced Motion, and reset assertions.
 
 Focused commands:
 
@@ -225,9 +267,13 @@ npm run test:debug
 npm run test:input
 npm run test:effects
 npm run test:performance
+npm run test:ui-actions
+npm run test:release-metadata
 npm run test:browser-performance
 npm run test:browser-crash
+npm run test:browser-results
 npm run test:goldens
+npm run capture:v181
 ```
 
 Useful development routes:
@@ -238,6 +284,7 @@ Useful development routes:
 - `?dev&level=16&debug=collisions` — aligned Loom, bike, terrain, platform, and goal proxies.
 - `?dev&level=16` — open the development console and call `__moto.stageCrash({ type: 'mace', presentationTicks: 36 })` for a deterministic Crash Theater scene.
 - `?dev&level=16&debug=collisions` — after staging a crash, inspect the 17 node circles, swept histories, links, contacts, and impact metrics.
+- `?dev&finish&capture&level=1` — stage a deterministic Finish Forge receipt for responsive and semantic inspection.
 - `?dev&level=14&perf` — live frame and effect telemetry.
 - `?dev&touch` — forced touch layout for desktop inspection.
 
@@ -246,7 +293,8 @@ Useful development routes:
 | Section | Purpose |
 |---|---|
 | [Documentation hub](docs/README.md) | Release, QA, screenshot, architecture, and handoff index |
-| [v1.8 Crash Theater brief](docs/releases/v1.8.0.md) | Current player-visible and technical update with four inspected captures, exact local gates, and explicit hosted/production limits |
+| [v1.8.1 Finish Forge brief](docs/releases/v1.8.1.md) | Current player-visible and technical update with exact arithmetic, input/reset/accessibility contracts, four inspected captures, and explicit delivery limits |
+| [v1.8 Crash Theater brief](docs/releases/v1.8.0.md) | Preserved screenshot-backed failure-presentation predecessor |
 | [v1.7 Vector Weave brief](docs/releases/v1.7.0.md) | Preserved screenshot-backed predecessor |
 | [Performance QA](docs/qa/PERFORMANCE.md) | Browser profiles, p95 budgets, method, and evidence limits |
 | [Golden Run QA](docs/qa/GOLDEN_TAPES.md) | Exact 16-course proof catalog and regeneration policy |

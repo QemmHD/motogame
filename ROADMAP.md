@@ -37,7 +37,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
 
-**Current evidence:** The v1.8 candidate passes the complete local 3 asset / 108 system / 16 route / 32 Gold / 2 ordinary browser / 3 crash-browser gate. The final local run measured ordinary callback-work p95 at 1.00 ms desktop and 0.81 ms mobile DPR 2; unfrozen crash p95 was 1.60 ms desktop and 1.50 ms mobile. All four deterministic Crash Theater captures were inspected at full resolution. Draft [PR #3](https://github.com/QemmHD/motogame/pull/3) pins gameplay SHA `89e5f7d9757e`, and [hosted run 29319685056](https://github.com/QemmHD/motogame/actions/runs/29319685056) independently passed the complete gate with publishing skipped. The Gold refresh is build-only: schema `1`, `physics-4`, `course-4`, all 16 outcomes, and all authoritative state hashes remain identical to v1.7 outside version-bearing tokens. Production URL/cache replacement, installed/offline smoke, and physical-device coverage still require direct evidence.
+**Current evidence:** The preserved v1.8 Crash Theater draft [PR #3](https://github.com/QemmHD/motogame/pull/3) and hosted gate pass with publishing skipped. The current v1.8.1 worktree passes its final 334.1-second local gate: 3 assets, 127 systems, 16 routes, 32 Gold replays, two ordinary-browser, three crash-browser, and two Finish Forge profiles plus four deterministic captures. Ordinary callback-work p95 was 1.10 ms desktop and 0.90 ms mobile DPR 2; the dedicated Finish Forge gate measured 0.70 ms across 123 desktop callbacks and 0.60 ms across 127 mobile DPR 2 callbacks against 8/12 ms budgets. The Gold refresh remains build-only: schema `1`, `physics-4`, `course-4`, all 16 outcomes, and authoritative state hashes are unchanged from v1.8.0 outside version-bearing tokens. The v1.8.1 gameplay commit, draft PR, hosted full gate, production URL/cache replacement, installed/offline smoke, and physical-device coverage still require direct evidence.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -97,9 +97,9 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Current evidence:** The v1.8 candidate keeps the authoritative `1.85` second retry timer, fixed-tick manual restart, replay schema `1`, `physics-4`, and `course-4` unchanged. Its DOM-free `1 / 120` crash simulation now drives the original 17-part Splitline model with articulated elbows/knees and cause-specific rider/bike separation. Ten immutable cause cards, detached crash reasons, natural terrain/deck cause routing, frozen terrain/platform contact fields, exact rounded top sweeps, surface friction, a 48-record impact queue, seeded bounded FX, pose-fitting camera policy, and detached ragdoll debug proxies are integrated. Thirty scripted crashes stay finite and settle; exact repeat and fixed-step partition tests pass; Reduced Motion produces/projects or freezes a static pose with fixed zoom/view height and zero slow motion, hitstop, flash, roll, shake, kick, secondary impact FX, or impact vibration. The complete v1.8 local and hosted gates pass, all 16 build-refreshed Gold Runs retain their v1.7 authoritative outcomes, three crash-browser profiles pass against an unfrozen crashed session plus frozen-review/retry assertions, and four final desktop/debug/mobile/Reduced Motion captures pass full-resolution inspection. The physical-browser cause/retry matrix and production smoke remain open and are not claimed complete.
 
-### U06 / v1.8 — Fast Failure, Great Finish
+### U06 / v1.8.1 — Fast Failure, Great Finish
 
-**Status:** PLAYABLE PREVIEW
+**Status:** RELEASE CANDIDATE
 
 **Player promise:** Retry is nearly instant and a successful finish clearly celebrates time, stars, flips, and personal bests.
 
@@ -109,7 +109,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Every mutable subsystem resets; finish arithmetic is exact; Next cannot select locked or missing content; keyboard, touch, and gamepad can retry and advance.
 
-**Current evidence:** Crash retry, explicit level restart, star/time/score results, PB messaging, Replay, Next, and Menu flows are integrated. Full mutable-subsystem auditing and the keyboard/touch/gamepad results-flow smoke matrix remain open.
+**Current evidence:** The v1.8.1 candidate replaces the old finish overlay with the original responsive Finish Forge receipt. A DOM-free policy validates authoritative gross/flip/net arithmetic in canonical milliseconds, reconciles every score event into itemized buckets, compares PB/ties without floating-point noise, and suppresses Replay/Next mutations when proof or legal unlocked content is missing. Retry, Replay, Next, Menu, and Gold Run have enabled-only focus wrap, visible Canvas focus, 44 px-or-larger non-overlapping targets, and a mirrored semantic dialog. Native semantic Tab/Shift+Tab/Enter, visible keyboard focus, R shortcuts, real touch-center Retry, and standard fake-gamepad D-pad/stick/A/B flows pass; held/repeated Enter, A, or throttle cannot dismiss a new receipt, simultaneous direction/confirm cannot activate the newly focused action, and Reduced Motion reveals the receipt immediately without effects. The final strict Chrome 150 gate recorded desktop 123 callbacks at 0.70 ms p95 and mobile DPR 2 127 callbacks at 0.60 ms p95, then passed locked/missing routes, disabled Replay, 320 × 568 geometry, and reset-residue assertions. Finish transitions clear timers, focus, semantic/live-region state, effects/tracks, camera/crash state, UI latches, scheduled audio, and active SFX sources. All 16 routes and 32 Gold replays pass with schema `1`, `physics-4`, `course-4`, and unchanged non-token v1.8.0 outcomes. Four deterministic Finish Forge captures match twice at zero pixel/channel difference. Physical keyboard/touch/gamepad and assistive-technology smoke plus hosted/production evidence remain open, so the status is a release candidate rather than production-complete.
 
 ### U07 / v1.9 — Landing Grade and Engine Soul
 
@@ -425,16 +425,16 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Immediate execution queue
 
-For the current v1.8 Crash Theater candidate:
+For the current v1.8.1 Fast Failure, Great Finish candidate:
 
-1. **Complete locally:** four inspected v1.8 captures preserve desktop hero, exact collision proxies, 390 × 844 DPR 2 mobile framing, and the static Reduced Motion pose without overwriting v1.7.
-2. **Complete locally:** the final-worktree 3-asset / 108-system / 16-route / 32-Gold / 2 ordinary-browser / 3 crash-browser gate passes with separately recorded v1.8 measurements.
-3. **Complete for review:** draft PR #3 pins gameplay SHA `89e5f7d9757e`; hosted Actions 29319685056 passed the complete gate and skipped publishing. Promote only after review; then verify visible `v1.8.0`, production cache replacement, installability, and offline relaunch.
-4. Exercise all ten crash causes plus retry on physical keyboard, representative multitouch, and real gamepad paths, including a deliberately low-end Android device and iOS Safari when available.
-5. Finish U02 with physical keyboard/touch/gamepad results-flow parity, explicit reset ownership for remaining presentation subsystems, and additional renderer/audio/persistence extraction.
-6. Human-check Vector Weave on keyboard and touch, then continue U04 with broader moving terrain and rotated/closed solid chains while keeping their reset/proof contract explicit.
-7. Continue U10 only after that contract with broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
-8. Finish U07 with wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget; record human route references and build PB Echoes only on the campaign-proven tape format.
+1. **Complete locally:** the Finish Forge policy, receipt, exact arithmetic, score reconciliation, guarded routes, semantic dialog, keyboard/touch/gamepad edge flows, Reduced Motion state, and reset ownership pass focused and strict browser gates.
+2. **Complete locally:** four inspected v1.8.1 captures preserve desktop hero, focused action, 390 × 844 DPR 2 mobile framing, and the static Reduced Motion receipt without overwriting v1.8 Crash Theater evidence.
+3. **Complete locally:** all 16 routes, 32 exact Gold replays, two ordinary performance/input profiles, and three Crash Theater regression profiles remain green with replay schema `1`, `physics-4`, and `course-4` unchanged.
+4. **Next delivery step:** record the final gameplay SHA, push the v1.8.1 branch, open its draft PR, and wait for the hosted full gate. Publishing must remain skipped on the feature branch.
+5. Promote only after review; then verify visible `v1.8.1`, production cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
+6. Exercise results and all ten crash causes on physical keyboard, representative multitouch, real gamepad, screen-reader/browser combinations, deliberately low-end Android, and iOS Safari when available.
+7. Continue U04/U10 with broader moving or rotated/closed solid geometry only after defining its reset/proof contract and recording separate human safe/apex references.
+8. Finish U07 with wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget; build PB Echoes only on the campaign-proven tape format.
 
 ## Update discipline
 

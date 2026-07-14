@@ -8,18 +8,18 @@ Compatibility identity:
 |---|---|
 | Manifest schema | `1` |
 | Replay schema | `1` |
-| Runtime build | `1.8.0` |
+| Runtime build | `1.8.1` |
 | Physics | `physics-4` |
 | Course generator | `course-4` |
 | Route class | `recovery` |
 
-Manifest SHA-256 for this candidate: `FE153EFFD8517A3D69FFD0E7099740FCEDF10F2D7C70ECA3F2C803BE8ED8DA59`.
+Manifest SHA-256 for this candidate: `48F307B97C223E93795A20F5A5885488A20FD1C4C10B4525B4A4214698560EF4`.
 
-The v1.8 refresh is intentional but **build-only**. Crash Theater changes player-visible presentation modules and offline-cache identity, while replay schema `1`, authoritative `physics-4`, `course-4`, all course definitions, fixed-step ordering, and proof fields remain unchanged. Build is still a required compatibility field, so a v1.7 token must be rejected rather than silently accepted under a differently packaged runtime.
+The v1.8.1 refresh is intentional but **build-only**. Finish Forge changes player-visible result policy, UI/input/accessibility presentation, install metadata, and offline-cache identity, while replay schema `1`, authoritative `physics-4`, `course-4`, all course definitions, fixed-step ordering, and proof fields remain unchanged. Build is still a required compatibility field, so a v1.8.0 token must be rejected rather than silently accepted under a differently packaged runtime.
 
-A direct manifest comparison against the reviewed v1.7 catalog found no changed non-token field for any of the 16 levels: finish tick, replay/tape/run ticks, elapsed/net time, score, recovery count, and authoritative state hash are identical. Only the manifest build plus build-bearing tokens changed. This is the central v1.8 tradeoff: explicit package compatibility costs a token refresh, but the unchanged physics/course identities and exact baseline comparison make clear that Crash Theater did not alter run authority.
+A direct manifest comparison against the reviewed v1.8.0 catalog found no changed non-token field for any of the 16 levels: finish tick, replay/tape/run ticks, elapsed/net time, score, recovery count, and authoritative state hash are identical. Only the manifest build plus build-bearing tokens changed. This is the central v1.8.1 tradeoff: explicit package compatibility costs a token refresh, while unchanged physics/course identities and exact baseline comparison make clear that Finish Forge did not alter run authority.
 
-The current `npm run test:goldens` was recorded on 2026-07-14: all 16 entries replayed twice in clean browser contexts for **32 exact passes with no divergence**. This proves authoritative finish reproduction; it does not test whether crash art, camera, particles, audio, haptics, or the cause card look or feel correct because those are intentionally excluded from proof hashes.
+The current `npm run test:goldens` was recorded on 2026-07-14: all 16 entries replayed twice in clean browser contexts for **32 exact passes with no divergence**. This proves authoritative finish reproduction; it does not test whether Finish Forge layout, focus, semantics, input edges, ceremony, or Crash Theater presentation look or feel correct because those are intentionally excluded from proof hashes and have separate browser/capture gates.
 
 ## Current reference catalog
 

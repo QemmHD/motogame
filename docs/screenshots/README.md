@@ -2,6 +2,22 @@
 
 Every release-candidate gallery is kept in its own directory. These files are real browser captures of the repository runtime, not concept art.
 
+## v1.8.1 — Fast Failure, Great Finish
+
+<p align="center">
+  <img src="v1.8.1/update-v181-finish-forge-hero.png" alt="Finish Forge desktop run receipt" width="900">
+</p>
+
+| Visible action focus | Reduced Motion |
+|:---:|:---:|
+| ![Finish Forge focus rail](v1.8.1/update-v181-focused-action.png) | ![Static immediately complete Finish Forge receipt](v1.8.1/update-v181-reduced-motion.png) |
+
+<p align="center">
+  <img src="v1.8.1/update-v181-mobile-finish.png" alt="Finish Forge at 390 by 844 and DPR 2" width="300">
+</p>
+
+See the [v1.8.1 capture record](v1.8.1/README.md) for fixed receipt/action/focus state, output dimensions, state identities, double-capture method, full-resolution review, and evidence limits.
+
 ## v1.8.0 — Crash Theater
 
 <p align="center">
