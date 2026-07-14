@@ -14,7 +14,7 @@ const PROFILES = Object.freeze([
     deviceScaleFactor: 1,
     isMobile: false,
     hasTouch: false,
-    p95WorkBudgetMs: 20,
+    p95WorkBudgetMs: 8,
   }),
   Object.freeze({
     id: 'mobile-390x844-dpr2',
@@ -22,7 +22,7 @@ const PROFILES = Object.freeze([
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
-    p95WorkBudgetMs: 25,
+    p95WorkBudgetMs: 12,
   }),
 ]);
 

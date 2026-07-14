@@ -43,6 +43,8 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - Performance samples and event counts reject non-finite input, clamp configured bounds, retain exact newest-window ordering across ring wrap, and reset while reusing their typed buffers.
 - Pages publishing is restricted to a successful push on `main`; pull requests and manual dispatches run tests without publishing, and the stale legacy release branch can no longer deploy production.
 - The hosted browser-performance gate now injects a bounded 360-sample probe around the game's sole animation-frame callback, measures for at least three seconds and up to fifteen seconds to collect 180 samples, and reports scheduler pacing separately from synchronous game work. Browser version and complete work/pacing diagnostics print before assertions; profile p95 budgets are not relaxed.
+- After a passing hosted reference measured 1.10 ms desktop and 1.20 ms mobile work p95, the regression ceilings were tightened to 8 ms and 12 ms instead of retaining the earlier frame-interval-oriented 20/25 ms values.
+- GitHub Actions checkout and Node setup advance to their Node 24-based v5 runtimes, and the test/publish jobs now have explicit ten/five-minute timeout ceilings.
 
 ### Verification
 
@@ -50,10 +52,11 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - **Deterministic systems:** 76 subtests—44 prior rules/replay/kinematics/ragdoll/session/proxy tests plus 9 effect-pool, 17 input-state, and 6 performance-metrics tests.
 - **Physics/routes:** all 15 authored courses pass the unchanged `physics-3` / `course-3` headless completion and stability gate.
 - **Gold Runs:** all 15 build-compatible references replay twice in clean browser contexts—30 exact passes with no divergence.
-- **Desktop profile:** the final clean local headless-Chrome gate at 1280 × 720 DPR 1 measured main-loop work p95 1.00 ms and diagnostic pacing p95 3.70 ms.
-- **Mobile profile:** the final clean local headless-Chrome gate at 390 × 844 DPR 2 measured main-loop work p95 0.81 ms and diagnostic pacing p95 3.70 ms, then passed 390 × 844 and 320 × 568 disjoint/unclipped control geometry, simultaneous touch, pointer cancel, blur pause/clear, 844 × 390 rotation pause/clear, canvas resize, telemetry counters, and left-hand layout assertions.
+- **Desktop profile:** the recorded local full-gate reference at 1280 × 720 DPR 1 measured main-loop work p95 1.00 ms and diagnostic pacing p95 3.70 ms.
+- **Mobile profile:** the recorded local full-gate reference at 390 × 844 DPR 2 measured main-loop work p95 0.81 ms and diagnostic pacing p95 3.70 ms, then passed 390 × 844 and 320 × 568 disjoint/unclipped control geometry, simultaneous touch, pointer cancel, blur pause/clear, 844 × 390 rotation pause/clear, canvas resize, telemetry counters, and left-hand layout assertions.
 - **Bounded effects:** browser telemetry and direct tests confirm 384/32/220 hard capacities, 636 total, with created and peak identities never exceeding their owning pool.
 - **Visual QA:** eight reviewed screenshots are stored under `docs/screenshots/v1.6/`.
+- **Hosted CI:** Actions run `29304809481` passed the complete 3/76/15/30/browser gate; publishing was correctly skipped for the draft pull request.
 
 The browser timings are repeatable main-thread work and pacing evidence for the named local Chrome profiles, not a claim that every phone will match them. Headless rendering, compositor/GPU cost, host scheduling, hardware, drivers, thermal state, installed mode, and production service-worker behavior can all differ from a physical device.
 

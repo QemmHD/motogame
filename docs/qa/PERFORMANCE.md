@@ -6,8 +6,8 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 
 | Profile ID | Viewport | DPR | Browser context | Frame-work p95 budget |
 |---|---:|---:|---|---:|
-| `desktop-1280x720-dpr1` | 1280 × 720 | 1 | desktop, no touch | < 20 ms |
-| `mobile-390x844-dpr2` | 390 × 844 | 2 | mobile context, touch enabled | < 25 ms |
+| `desktop-1280x720-dpr1` | 1280 × 720 | 1 | desktop, no touch | < 8 ms |
+| `mobile-390x844-dpr2` | 390 × 844 | 2 | mobile context, touch enabled | < 12 ms |
 
 The recorded full-gate reference run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
 
@@ -15,10 +15,21 @@ The recorded full-gate reference run used a local **system-installed Chrome in h
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 1.00 ms | 3.38 ms | 3.70 ms | p95 < 20 ms | Pass |
-| Mobile 390 × 844 @2 | 360 frames | 0.40 ms | 0.81 ms | 2.44 ms | 3.70 ms | p95 < 25 ms | Pass |
+| Desktop 1280 × 720 @1 | 360 frames | 0.40 ms | 1.00 ms | 3.38 ms | 3.70 ms | p95 < 8 ms | Pass |
+| Mobile 390 × 844 @2 | 360 frames | 0.40 ms | 0.81 ms | 2.44 ms | 3.70 ms | p95 < 12 ms | Pass |
 
 Both callback-work p95 measurements are below their repository budgets. `Work` is the synchronous duration of the game's animation-frame callback, including fixed-step updates, presentation updates, and canvas command submission. `Pacing` is the existing runtime's callback-to-callback wall interval; it remains visible as a diagnostic but is not gated on shared CI because host scheduling dominates it. Neither view is a universal performance guarantee or a physical-display FPS/GPU claim.
+
+### Hosted Actions confirmation
+
+[GitHub Actions run 29304809481](https://github.com/QemmHD/motogame/actions/runs/29304809481) passed the same gate in Chrome 150 on the hosted Ubuntu runner:
+
+| Profile | Work samples | Work p50 | Work p95 | Work p99 | Work max | Pacing p95 | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Desktop 1280 × 720 @1 | 181 | 0.80 ms | 1.10 ms | 1.22 ms | 2.60 ms | 66.70 ms | Pass |
+| Mobile 390 × 844 @2 | 181 | 0.70 ms | 1.20 ms | 1.48 ms | 3.00 ms | 100.00 ms | Pass |
+
+The work measurements remain close to the local reference while pacing differs sharply, which is the expected signature of shared-host scheduling rather than a hidden 50-100 ms game callback.
 
 ## Browser harness procedure
 

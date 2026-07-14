@@ -16,7 +16,7 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Working branch | `agent/motorush-30-update-foundation` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
 | Draft pull request | `#1` — branch review/promotion vehicle |
-| Candidate delivery state | `v1.6.0` is on the feature branch and draft PR `#1`; it is not production |
+| Candidate delivery state | `v1.6.0` is on the feature branch and draft PR `#1`; its complete Actions test job passes, but it is not production |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
@@ -97,10 +97,12 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 | Profile | Local frame-work p95 | Diagnostic pacing p95 | Work budget | Result |
 |---|---:|---:|---:|---|
-| 1280 × 720, DPR 1, desktop | 1.00 ms | 3.70 ms | 20 ms | Pass |
-| 390 × 844, DPR 2, mobile/touch emulation | 0.81 ms | 3.70 ms | 25 ms | Pass |
+| 1280 × 720, DPR 1, desktop | 1.00 ms | 3.70 ms | 8 ms | Pass |
+| 390 × 844, DPR 2, mobile/touch emulation | 0.81 ms | 3.70 ms | 12 ms | Pass |
 
 Both observed main-thread work p95 values are below the roadmap's 16.7 ms target. Pacing remains visible as a separate diagnostic because headless scheduling is not portable across hosts. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state.
+
+GitHub Actions run `29304809481` independently passed the complete release gate with 181 work samples per profile. Its work p95 was 1.10 ms desktop and 1.20 ms mobile; pacing p95 was 66.70 ms and 100.00 ms, demonstrating why shared-runner scheduling remains diagnostic while synchronous game work is the regression metric.
 
 ## Repository Gold Run evidence
 
@@ -215,7 +217,7 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Immediate next priorities
 
-1. Review draft PR `#1`, confirm its eight-image gallery and exact 3/76/15/30/2 gate, inspect the final diff, and require a passing GitHub Actions run.
+1. Review draft PR `#1`, confirm its eight-image gallery and exact 3/76/15/30/2 gate, inspect the final diff, and preserve the currently passing GitHub Actions test job.
 2. Promote only after review; verify visible `v1.6.0`, eligible Pages workflow, cache replacement, installability, and offline reload on the canonical URL.
 3. Repeat the interruption and performance matrix on representative physical devices: low-end Android, iOS Safari if available, keyboard desktop, multitouch, and a real gamepad. Preserve measurements, screenshots, and console results.
 4. Continue U04 with a DOM-free force-zone contract, deterministic fixtures, debug proxies, reset/checkpoint behavior, and unchanged-baseline tests before adding course content.

@@ -90,7 +90,7 @@ Dust, debris, smoke, sparks, confetti, score popups, and tire tracks run through
 
 A fixed-ring telemetry module records frame time, simulation ticks, catch-up pressure, clamped time, viewport changes, and effect-pool activity without allocating a new sample object each frame. Development telemetry reports FPS, mean, p50, p95, p99, maximum frame time, slow frames, effect peaks, reuse, and evictions.
 
-The final clean local headless Chrome gate recorded **1.00 ms desktop main-loop work p95** against a 20 ms regression budget and **0.81 ms mobile DPR 2 work p95** against a 25 ms budget. Browser pacing is reported separately so a hosted runner's scheduling does not masquerade as game workload. These figures are reproducible automation evidence from the current development machine, not physical-device certification.
+The recorded full-gate local headless Chrome reference measured **1.00 ms desktop main-loop work p95** against an 8 ms regression budget and **0.81 ms mobile DPR 2 work p95** against a 12 ms budget. The passing hosted run measured 1.10 ms and 1.20 ms respectively. Browser pacing is reported separately so a hosted runner's scheduling does not masquerade as game workload. These figures are reproducible automation evidence, not physical-device certification.
 
 ### Interruption-safe input
 
