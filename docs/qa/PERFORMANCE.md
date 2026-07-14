@@ -22,7 +22,18 @@ Both callback-work p95 measurements are below their repository budgets. `Work` i
 
 The table above is the final v1.7 local `npm test` run in Chrome 150. It includes the new Kinetic Loom module, renderer, Vector Weave course, and 16-route catalog.
 
-### Hosted Actions confirmation for the v1.6 predecessor
+### Hosted Actions confirmation — v1.7.0
+
+[GitHub Actions run 29307193559](https://github.com/QemmHD/motogame/actions/runs/29307193559) passed the complete draft-PR gate in Chrome 150 on the hosted Ubuntu runner:
+
+| Profile | Work samples | Work p50 | Work p95 | Work p99 | Work max | Pacing p95 | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Desktop 1280 × 720 @1 | 182 | 0.80 ms | 1.10 ms | 1.34 ms | 2.80 ms | 66.70 ms | Pass |
+| Mobile 390 × 844 @2 | 182 | 0.70 ms | 1.10 ms | 1.42 ms | 2.60 ms | 100.00 ms | Pass |
+
+The hosted gate also passed 3 asset/offline checks, 87 deterministic system subtests, all 16 routes, and all 16 Gold tapes twice. Publishing was correctly skipped because the event was a draft pull request rather than an eligible push to `main`.
+
+### Preserved v1.6 predecessor
 
 [GitHub Actions run 29304809481](https://github.com/QemmHD/motogame/actions/runs/29304809481) passed the same gate in Chrome 150 on the hosted Ubuntu runner:
 
@@ -31,7 +42,7 @@ The table above is the final v1.7 local `npm test` run in Chrome 150. It include
 | Desktop 1280 × 720 @1 | 181 | 0.80 ms | 1.10 ms | 1.22 ms | 2.60 ms | 66.70 ms | Pass |
 | Mobile 390 × 844 @2 | 181 | 0.70 ms | 1.20 ms | 1.48 ms | 3.00 ms | 100.00 ms | Pass |
 
-The v1.6 work measurements remained close to its local reference while pacing differed sharply, which is the expected signature of shared-host scheduling rather than a hidden 50-100 ms game callback. A v1.7 hosted run remains pending until this branch is pushed and its draft pull request workflow completes; the local v1.7 figures must not be mislabeled as hosted evidence.
+Both hosted runs keep synchronous work close to their local references while pacing differs sharply, which is the expected signature of shared-host scheduling rather than a hidden 50-100 ms game callback.
 
 ## Browser harness procedure
 

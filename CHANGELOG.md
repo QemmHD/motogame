@@ -32,13 +32,14 @@ This candidate advances U04 Collision Keystone with an original player-facing fo
 - **Baseline preservation:** levels 1–15 retain identical finish ticks, run ticks, elapsed/net times, scores, recovery counts, and authoritative state hashes outside version-bearing tokens.
 - **Vector Weave:** authoritative session touches and enters all three fields with zero crashes; the Gold route finishes in 258 ticks / 4.30 seconds with 3,644 points and zero recoveries.
 - **Performance:** Chrome 150 recorded 360 samples per profile; work p95 was 1.00 ms desktop against 8 ms and 2.20 ms mobile DPR 2 against 12 ms. Pacing p95 was 3.70 ms for both and remains diagnostic.
+- **Hosted CI:** draft-PR Actions run `29307193559` passed the complete v1.7 gate at 1.10 ms work p95 for both profiles; publishing remained ineligible and skipped.
 - **Visual QA:** four full-resolution captures were inspected; the collision image aligns Loom art, rectangles, and clipped vectors, while mobile controls remain visible and Reduced Motion retains direction.
 
 ### Remaining before promotion
 
 - Human keyboard and touch calibration for Vector Weave recovery, optional-deck readability, and star targets.
 - Representative physical iOS/Android, real gamepad, audio/haptics, long-session, install, offline-relaunch, and low-end-device checks.
-- Hosted v1.7 Actions evidence, eligible Pages publish, cache replacement, visible version, and canonical production smoke.
+- Eligible Pages publish, cache replacement, visible version, and canonical production smoke.
 - General moving terrain, rotated/two-sided closed chains, and solid side/ceiling contacts remain open U04 work.
 
 ## [1.6.0] — 2026-07-13 — Smooth Ride (release candidate)

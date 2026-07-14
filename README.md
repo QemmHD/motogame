@@ -106,7 +106,7 @@ Dust, debris, smoke, sparks, confetti, score popups, and tire tracks run through
 
 A fixed-ring telemetry module records frame time, simulation ticks, catch-up pressure, clamped time, viewport changes, and effect-pool activity without allocating a new sample object each frame. Development telemetry reports FPS, mean, p50, p95, p99, maximum frame time, slow frames, effect peaks, reuse, and evictions.
 
-The final v1.7 full-gate local headless Chrome reference measured **1.00 ms desktop main-loop work p95** against an 8 ms regression budget and **2.20 ms mobile DPR 2 work p95** against a 12 ms budget. The preserved v1.6 hosted predecessor measured 1.10 ms and 1.20 ms respectively; v1.7 hosted evidence is recorded separately after publication. Browser pacing is reported separately so a hosted runner's scheduling does not masquerade as game workload. These figures are reproducible automation evidence, not physical-device certification.
+The final v1.7 full-gate local headless Chrome reference measured **1.00 ms desktop main-loop work p95** against an 8 ms regression budget and **2.20 ms mobile DPR 2 work p95** against a 12 ms budget. [Hosted Actions run 29307193559](https://github.com/QemmHD/motogame/actions/runs/29307193559) passed the same v1.7 gate at **1.10 ms** for both profiles; scheduler pacing remained diagnostic. These figures are reproducible automation evidence, not physical-device certification.
 
 ### Interruption-safe input
 
@@ -222,6 +222,7 @@ design/                 Feel specification and production asset inventory
 | | |
 |---|---|
 | **Current candidate** | v1.7.0 — Vector Weave |
+| **Draft review** | [PR #2 — Ship v1.7.0: Vector Weave](https://github.com/QemmHD/motogame/pull/2) |
 | **Course count** | 16 across three worlds |
 | **Reference coverage** | 16/16 repository recovery tapes, each verified twice |
 | **Effects ceiling** | 636 live items across particles, popups, and tracks |

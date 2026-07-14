@@ -15,13 +15,13 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Replay identity | schema `1`; physics `physics-4`; course `course-4` |
 | Working branch | `agent/motorush-v17-collision-keystone` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
-| Draft pull request | v1.7 draft pending; v1.6 predecessor remains preserved in `#1` |
-| Candidate delivery state | `v1.7.0` passes its complete local gate and visual review on the collision-keystone branch; it is not production |
+| Draft pull request | [v1.7 draft `#2`](https://github.com/QemmHD/motogame/pull/2); v1.6 predecessor remains preserved in `#1` |
+| Candidate delivery state | `v1.7.0` is pushed, locally verified, and hosted-gate green on draft PR `#2`; it is not production |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
 
-The v1.7 release candidate is tracked separately from the preserved v1.6 draft PR. Use `git rev-parse HEAD`, `git status -sb`, and the eventual v1.7 draft PR for current coordinates. A pushed feature branch is still not production: do not describe v1.7 as live until review, promotion to `main`, a successful GitHub Pages run, and canonical URL/cache/offline smoke are recorded.
+The v1.7 release candidate is tracked in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2), separately from the preserved v1.6 draft PR. Use `git rev-parse HEAD`, `git status -sb`, and PR `#2` for current coordinates. A pushed feature branch is still not production: do not describe v1.7 as live until review, promotion to `main`, a successful GitHub Pages run, and canonical URL/cache/offline smoke are recorded.
 
 The build-version field is part of replay compatibility. Repository Gold tokens were intentionally regenerated for `1.7.0` / `physics-4` / `course-4` because Kinetic Looms add authoritative acceleration and Vector Weave changes the catalog. Levels 1–15 retain identical finish outcomes and final state hashes outside their version-bearing tokens.
 
@@ -110,7 +110,7 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 Both observed main-thread work p95 values are below the roadmap's 16.7 ms target. Pacing remains visible as a separate diagnostic because headless scheduling is not portable across hosts. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical phone. The mobile pass additionally asserts disjoint and unclipped control zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state.
 
-The table records the final v1.7 local full-gate run: 360 work samples per profile, 80 fixed ticks and 67/636 peak effects on desktop, plus 77 fixed ticks and 70/636 peak effects on mobile. Hosted v1.7 evidence is still pending publication of the draft branch. Preserved v1.6 Actions run `29304809481` remains predecessor evidence, not evidence for this candidate.
+The table records the final v1.7 local full-gate run: 360 work samples per profile, 80 fixed ticks and 67/636 peak effects on desktop, plus 77 fixed ticks and 70/636 peak effects on mobile. [Hosted Actions run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559), pinned to gameplay SHA `3b1cd56`, independently passed the 3/87/16/32/2 gate; work p95 was 1.10 ms for both profiles, while shared-runner pacing was 66.70 ms desktop and 100.00 ms mobile and remains diagnostic. Publishing was correctly skipped for the draft PR.
 
 ## Repository Gold Run evidence
 
@@ -233,7 +233,7 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Immediate next priorities
 
-1. Publish and review the separate v1.7 draft PR, confirm its four-image Vector Weave gallery and exact 3/87/16/32/2 gate, inspect the final diff, and preserve the hosted Actions result.
+1. Review v1.7 draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2), confirm its four-image Vector Weave gallery and exact 3/87/16/32/2 gate, inspect the final diff, and preserve hosted Actions run `29307193559`.
 2. Promote only after review; verify visible `v1.7.0`, eligible Pages workflow, cache replacement, installability, and offline reload on the canonical URL.
 3. Repeat the interruption and performance matrix on representative physical devices: low-end Android, iOS Safari if available, keyboard desktop, multitouch, and a real gamepad. Preserve measurements, screenshots, and console results.
 4. Continue U04 with broader moving/rotating or closed collision chains, keeping their proof/version and reset implications explicit.
