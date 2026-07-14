@@ -1,6 +1,6 @@
 # Moto Rush X3 Architecture
 
-This document describes the `v1.5.0` Gold Standard release-candidate architecture as it exists on 2026-07-13. The game is a static, framework-free Canvas 2D application. `public/` is the complete deployment boundary.
+This document describes the `v1.6.0` Smooth Ride release-candidate architecture as it exists on 2026-07-13. The game is a static, framework-free Canvas 2D application. `public/` is the complete deployment boundary. Replay schema `1`, `physics-3`, and `course-3` remain unchanged from v1.5; Gold tokens were regenerated only because build identity is part of compatibility.
 
 ## Runtime map
 
@@ -8,8 +8,11 @@ This document describes the `v1.5.0` Gold Standard release-candidate architectur
 | --- | --- |
 | `public/index.html` | Canvas shell, mobile/PWA metadata, build metadata bootstrap, game-module load, and service-worker registration. The `?dev` flag deliberately skips service-worker registration. |
 | `public/version.js` | Single runtime release and offline-cache version. Exposes frozen `globalThis.MOTO_RUSH_BUILD`. |
-| `public/game.js` | Browser orchestration: asset/reference loading, input/replay selection, audio, save data, menus, presentation effects, crash theater, camera, Canvas rendering, and the animation loop. It advances the authoritative run session but does not reimplement its rules or scoring. |
+| `public/game.js` | Browser orchestration: asset/reference loading, DOM input adapters, replay selection, audio, save data, menus, pooled presentation effects, crash theater, camera, Canvas rendering, performance telemetry, and the animation loop. It advances the authoritative run session but does not reimplement its rules or scoring. |
 | `public/run-session.js` | DOM-free authoritative fixed-step lifecycle: terrain/bike/rules/platform creation, playing/crashed steps, scoring, checkpoint capture/restore, triggered platform activation, crash/respawn/finish transitions, and proof snapshots. |
+| `public/effect-pool.js` | DOM-free fixed-capacity reusable effect storage with unique leases/generations, deterministic oldest-active eviction, stale-release rejection, clear-without-storage-reallocation, allocation-free active iteration, and bounded statistics. |
+| `public/input-state.js` | DOM-free keyboard, multi-pointer, gamepad, and development-command aggregation; remapping; reusable fixed-tick reads; interruption clearing/pause recommendations; diagnostics; and left-hand layout metadata. |
+| `public/perf-metrics.js` | DOM-free fixed typed-ring telemetry for frame/tick pressure, dropped/clamped time, effect counts, viewport/DPR/rotation, interruption events, and detached p50/p95/p99 summaries. |
 | `public/levels.js` | `Course` builder DSL, `course-3` compatibility identity, and 15 authored definitions across Canyon Run, Stormworks, and R&D Yard. |
 | `public/physics.js` | DOM-free `physics-3` terrain/bike simulation, collision response, platform integration, surface behavior, landing grades/retention, flip signals, safety limits, and impulses. |
 | `public/rules.js` | DOM-free per-run state, deterministic full/checkpoint reset, tick-derived hazard motion, swept hazard checks, TNT behavior, checkpoints, near misses, and finish events. |
@@ -30,12 +33,16 @@ This document describes the `v1.5.0` Gold Standard release-candidate architectur
 | `tools/ragdoll.test.mjs` | Thirty-crash finite/settle fixture, exact repeat, and reduced-motion tests. |
 | `tools/run-session.test.mjs` | Browser-neutral finish, crash timing, manual/automatic respawn, full restart, scoring repeatability, trigger/checkpoint restore, and authored-data immutability tests. |
 | `tools/debug-proxies.test.mjs` | Proxy-to-authoritative-geometry alignment, finite bounds, caps, detachment, and no-mutation tests. |
+| `tools/effect-pool.test.mjs` | Nine deterministic tests for hard bounds, eviction order, lease/generation safety, clear/reuse, iteration mutation, schema isolation, custom initialization, and finite statistics. |
+| `tools/input-state.test.mjs` | Seventeen deterministic tests for keyboard aliases/remapping, multi-source and multi-pointer aggregation, cancel/lost-capture/lifecycle clearing, gamepad/dev replacement, reusable reads, left-hand metadata, and bounded churn. |
+| `tools/perf-metrics.test.mjs` | Six deterministic tests for exact quantiles/counters, ring wrap, validation/clamping, viewport/interruption events, detached/reset reuse, and long bounded churn. |
 | `tools/test-physics.mjs` | Asserted 15-level headless completion, checkpoint recovery, and stability gate. |
 | `tools/generate-golden-tapes.mjs` | Loopback-only real-browser generator for deterministic all-course recovery tapes. |
 | `tools/verify-golden-tapes.mjs` | Strict manifest/token/catalog validator and twice-per-level clean-browser replay gate. |
+| `tools/performance-browser.mjs` | Repeatable installed-Chrome desktop/mobile frame-profile gate, pool-bound checks, page/console error audit, and touch cancel/blur/rotation/left-hand interruption matrix. |
 | `.github/workflows/pages.yml` | Runs the release gate, then publishes the `public/` subtree to `gh-pages` for eligible pushes or a manual dispatch. |
 
-Keep simulation behavior in `physics.js`, `rules.js`, `kinematics.js`, `run-session.js`, `replay.js`, or `ragdoll.js` when it can remain independent of the DOM. `game.js` selects/records input, advances `run-session.js`, and turns returned events into presentation, sound, persistence, and UI. Ragdoll state is deterministic presentation but is deliberately not authoritative run state.
+Keep simulation behavior in `physics.js`, `rules.js`, `kinematics.js`, `run-session.js`, `replay.js`, or `ragdoll.js` when it can remain independent of the DOM. Keep browser-neutral presentation infrastructure in `effect-pool.js`, `input-state.js`, and `perf-metrics.js`. `game.js` adapts browser events, selects/records commands, advances `run-session.js`, and turns returned events into pooled presentation, sound, persistence, telemetry, and UI. Ragdoll state and performance measurements are deliberately not authoritative run state.
 
 ## Fixed-step data flow
 
@@ -44,15 +51,45 @@ The browser paints with `requestAnimationFrame`, but game state advances in fixe
 1. `version.js` initializes the build label and cache name before the ES modules load.
 2. `game.js` loads assets plus the compatible repository Gold manifest and builds all level definitions once with `buildLevels()`.
 3. `startLevel()` validates a supplied player/Gold tape when present, then calls `initializeRunSession()` to create fresh bucketed terrain, rules, kinematics, bike, scoring, and lifecycle state. Normal play creates a recorder tagged with level/build/physics/course compatibility metadata.
-4. Each animation frame clamps a long wall-clock gap to 100 ms, applies the current slow-motion multiplier, and adds the result to an accumulator.
-5. While the accumulator contains at least one `1 / 60` second step, `simulate(STEP)` runs for active play or crash states. Particles and the camera also update on this fixed cadence.
-6. `simulate()` reads keyboard, pointer, development-autoplay, or replay input. A normal run records that snapshot exactly once; replay mode reads the mask for the same integer replay tick.
+4. Each animation frame captures raw wall time, clamps a long gap to 100 ms, applies the current slow-motion multiplier, and adds the result to an accumulator. Raw/clamped values are diagnostic only.
+5. While the accumulator contains at least one `1 / 60` second step, `simulate(STEP)` runs for active play or crash states. Pooled effects and the camera also update on this fixed cadence without replacement-array cleanup.
+6. Once per rendered frame, the browser adapter polls connected gamepads into reusable scratch state and emits diagnostics only when their aggregate command changes. `simulate()` then reads the combined reusable command target from `input-state.js`, or reads replay input. A normal run records that command exactly once; replay mode reads the mask for the same integer replay tick.
 7. Playing state calls `stepPlayingRun()` once. The session advances kinematics, steps bike physics, activates passed platform sensors, resolves platform contact, applies scoring, advances rules/hazards, captures checkpoints, and transitions to crash/fallout/finish as one ordered operation.
 8. Crashed state calls `stepCrashedRun()` once. Manual restart is consumed on its recorded fixed tick; otherwise the 1.85-second session timer advances and auto-respawns at the deterministic boundary.
-9. `game.js` consumes plain flips, landings, score records, blasts, near misses, platform activation, checkpoint, crash, finish, and respawn events to drive audio, haptics, particles, camera, ragdoll, persistence, and UI without mutating authoritative arithmetic.
-10. A crash creates a separate ragdoll snapshot and advances it during the short crash state. A finish finalizes or verifies the authoritative session snapshot. Rendering reads state but does not advance authoritative bike/rules/platform ticks.
+9. `game.js` consumes plain flips, landings, score records, blasts, near misses, platform activation, checkpoint, crash, finish, and respawn events to drive audio, haptics, pooled particles/popups/tracks, camera, ragdoll, persistence, and UI without mutating authoritative arithmetic.
+10. A crash creates a separate ragdoll snapshot and advances it during the short crash state. A finish finalizes or verifies the authoritative session snapshot. Rendering reads state but does not advance authoritative bike/rules/platform ticks. After the frame, `perf-metrics.js` records frame duration, fixed ticks, accumulator backlog, clamped/dropped time, effect counts/capacity, and viewport state into its fixed ring.
 
 Hitstop intentionally renders without advancing the fixed simulation. Slow motion changes how quickly fixed ticks are consumed relative to wall-clock time; it does not change the fixed simulation step. Hazard and platform movement derive from integer simulation ticks, not `performance.now()`, so equal versioned starting state and inputs produce equal machine poses.
+
+## Browser input, effects, and performance
+
+### Input boundaries
+
+`input-state.js` knows no DOM, canvas, navigator, focus, or orientation APIs. The browser adapter converts keyboard codes, pointer IDs/coordinates, `navigator.getGamepads()` snapshots, and development autoplay into plain calls. The fixed-step hot path uses `readCommands(reusableTarget)`; detached `snapshot()` and source/telemetry reports are for QA only.
+
+Pointer zones are rebuilt from current CSS-pixel control geometry after resize or orientation change. Their radii and cluster spacing scale down at narrow widths so the 320 × 568 gate keeps all targets inside the viewport and opposing command circles disjoint. Up, cancel, and lost-capture paths release only the matching pointer. Blur, document-hidden, rotation, restart, and manual transitions clear every input source; pause recommendations let `game.js` own player-visible pause policy. The left-handed setting swaps the touch command-cluster metadata and geometry but never changes replay bit meaning.
+
+### Effect bounds and lifetimes
+
+`game.js` creates exactly three effect pools once:
+
+| Pool | Hard capacity | Exhaustion behavior |
+| --- | ---: | --- |
+| Particles | 384 | Oldest active particle is deterministically reused. |
+| Popups | 32 | Oldest active popup is deterministically reused. |
+| Tracks | 220 | Oldest active track is deterministically reused. |
+
+The maximum live/created presentation identity count is therefore 636. Acquisitions use unique leases and per-slot generations so an expired reference cannot release a newer occupant. A full restart clears active leases but preserves storage. Updating, expiring, and drawing iterate active linked slots directly; no `filter()`, `shift()`, or per-frame effect list is required. Pools remain presentation-only and are excluded from checkpoints and proof hashes.
+
+### Allocation and draw audit
+
+The v1.6 renderer caches dimension/key-dependent sky and terrain gradients, binary-searches each terrain chain to draw only the visible point slice, and reuses scalar camera accumulation, crash-ragdoll node lookups, engine state, menu/world lists, settings rows, control command targets, and effect callbacks. Some Canvas/browser primitives can still allocate internally; the contract is bounded JavaScript-owned effect storage plus repeatable frame measurements, not a claim of zero browser allocations.
+
+### Telemetry contract
+
+`perf-metrics.js` owns fixed typed arrays for 360 recent frames in the integrated browser. `recordPerformanceFrame()` performs validation and positional writes without growing storage. The browser loop consumes at most five fixed ticks in one rendered frame and retains at most six backlog ticks, so its backlog/drop counters describe actual bounded pressure instead of a post-drain constant. Explicit snapshots allocate detached, sorted reporting data and calculate FPS, mean, p50, p95, p99, maximum, slow/catch-up/backlog/drop/clamp totals, effect current/peaks, and viewport/DPR/rotation/focus/cancel counters. The live `?dev&performance` overlay requests these reports for inspection; the normal route does not show the overlay.
+
+`tools/performance-browser.mjs` measures a warmed three-second autoplay window in installed headless Chrome and validates two named profiles. The final clean candidate gate recorded 7.10 ms p95 at 1280 × 720 DPR 1 and 10.70 ms p95 at 390 × 844 DPR 2. It rejects a static/non-playing sample, requires fixed-tick and effect activity, and checks page/console errors after the interaction matrix as well as measurement. The mobile profile then checks disjoint/unclipped zones at 390 × 844 and 320 × 568, simultaneous pointers, selective cancellation, blur clearing/pause, rotation clearing/pause and canvas resize, telemetry events, and left-hand controls. These results satisfy the local gate but must not be generalized to untested physical phones or the undeployed production service-worker path.
 
 ## Physics and collision model
 
@@ -150,20 +187,20 @@ The browser client persists JSON under `localStorage` key `motoRushX3.save.v1`. 
 - best star count by level;
 - highest unlocked level;
 - one last completed replay token by level;
-- music, sound-effect, reduced-motion, and haptics settings;
+- music, sound-effect, reduced-motion, haptics, and left-hand-control settings;
 - mute state.
 
 Reads and writes are wrapped in `try`/`catch`, and missing fields receive defaults. There is no separate migration framework: a breaking save-shape change must either preserve these fields, migrate data during `loadSave()`, or intentionally introduce a new key with a documented reset policy.
 
-Pointer input supports multiple simultaneous pointers and clears each pointer on `pointerup`, `pointercancel`, and `lostpointercapture`. Keyboard/pointer state is cleared and active play pauses when the page loses focus or becomes hidden. This prevents stuck controls after an interruption.
+The browser owns event listeners, but `input-state.js` owns held ride commands. Multiple simultaneous pointers clear independently on `pointerup`, `pointercancel`, and `lostpointercapture`. Keyboard, pointer, gamepad, and development state clear together and active play pauses when the page loses focus, becomes hidden, or rotates. Pointer-surface reconfiguration also invalidates old pointer holds. This prevents a command from surviving an interruption or responsive-layout change.
 
 ## Offline and deployment model
 
 `public/version.js` is authoritative for both the menu label and service-worker cache identity. The service worker imports it, atomically adds the literal `PRECACHE` list during install, removes only stale caches with the Moto Rush prefix during activation, and uses cache-first fetches. Successful same-origin network responses may populate the cache at runtime. Query strings are ignored for cache matching.
 
-`tools/verify-public-assets.mjs` enforces that every runtime file under `public/` is explicitly precached, every literal local reference resolves, all public JavaScript parses, JSON is valid, the cache name derives from the single semantic version, and the precache contains only literal canonical paths. Replay, kinematics, run session, debug proxies, ragdoll, rules, physics, levels, Gold data, bike art, and music are covered. Additions to `public/` therefore require a matching `PRECACHE` entry.
+`tools/verify-public-assets.mjs` enforces that every runtime file under `public/` is explicitly precached, every literal local reference resolves, all public JavaScript parses, JSON is valid, the cache name derives from the single semantic version, and the precache contains only literal canonical paths. Replay, kinematics, run session, debug proxies, effect pools, input state, performance metrics, ragdoll, rules, physics, levels, Gold data, bike art, and music are covered. Additions to `public/` therefore require a matching `PRECACHE` entry.
 
-The Pages workflow runs `npm test` before publishing. On an eligible push to `main` or `claude/moto-x3m-bike-game-ipwi7p`, or on a manual workflow dispatch, it splits `public/` into a temporary branch and force-pushes that subtree to `gh-pages`. A push to another feature branch does not update production. Because the deployed root is the contents of `public/`, repository-relative paths outside `public/` are never available to the live game.
+The Pages workflow runs `npm test` for pull requests into `main`, manual dispatches, and pushes to `main`. Only a successful push to `main` may publish: it splits `public/` into a temporary branch and force-pushes that subtree to `gh-pages`. Feature branches and manual runs cannot update production. Because the deployed root is the contents of `public/`, repository-relative paths outside `public/` are never available to the live game.
 
 ## Core invariants
 
@@ -171,7 +208,7 @@ Preserve these rules when changing the game:
 
 1. Simulation uses a fixed `1 / 60` second step; wall-clock time must not directly drive course rules or hazard motion.
 2. `physics.js` and `rules.js` remain DOM-free and executable in Node tests.
-3. `kinematics.js`, `run-session.js`, `debug-proxies.js`, `replay.js`, and `ragdoll.js` also remain DOM-free and executable in Node tests.
+3. `kinematics.js`, `run-session.js`, `debug-proxies.js`, `replay.js`, `ragdoll.js`, `effect-pool.js`, `input-state.js`, and `perf-metrics.js` also remain DOM-free and executable in Node tests.
 4. Course definitions, especially `course.hazards` and `course.platforms`, stay immutable during play; mutable state belongs to a run object.
 5. Positive `y` is down, and normal course ground and platform tops are one-way from above.
 6. The configured wheel radius is both the collision radius and the visual radius.
@@ -182,7 +219,10 @@ Preserve these rules when changing the game:
 11. New public runtime files and local references must be present in the static service-worker precache.
 12. `public/version.js` contains the only runtime release-version literal and owns cache invalidation.
 13. Every level has a start, at least one valid route, a finish, and three star thresholds ordered fastest to slowest.
-14. A release must pass asset/offline checks, all deterministic system tests, all-level completion/stability tests, all compatible repository proofs, and real browser visual/input smoke.
+14. Particle, popup, and track identities remain hard-bounded at 384, 32, and 220 unless a separately measured release intentionally changes those budgets.
+15. Blur, hidden-document, rotation, pointer cancel, and lost capture cannot leave ride commands held; layout changes must invalidate old pointer geometry.
+16. Frame telemetry, random presentation effects, camera, audio, and ragdoll state never enter authoritative checkpoints or replay hashes.
+17. A release must pass asset/offline checks, all deterministic system tests, all-level completion/stability tests, all compatible repository proofs, and the repeatable real-browser performance/input gate. Production sign-off additionally requires the deployed cache/offline and physical-device smoke appropriate to the claim.
 
 ## Safe extension recipes
 

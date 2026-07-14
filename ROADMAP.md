@@ -37,7 +37,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
 
-**Current evidence:** The v1.5 gate contains 3 asset/offline subtests, 44 deterministic system subtests, a 15-level headless physics/rules route pass, and 15 checked-in browser proofs replayed twice. Local visual QA covers repository references, triggered ground, collision alignment, verified finish UI, responsive layout, and an error-free console. Production URL and offline-update smoke evidence must still be recorded for the candidate actually deployed.
+**Current evidence:** The v1.6 gate contains 3 asset/offline subtests, 76 deterministic system subtests, a 15-level headless physics/rules route pass, 15 checked-in Gold proofs replayed twice (30 exact browser passes), and two repeatable browser-performance profiles. Local visual QA covers repository references, triggered ground, collision alignment, verified finish UI, responsive and rotated layouts, left-hand controls, and live performance telemetry without page errors. Production URL, installed/offline cache replacement, and physical-device smoke evidence must still be recorded for the candidate actually deployed.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -53,9 +53,9 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Current evidence:** Fifty repeated rules restarts/checkpoint restores reproduce expected state, and the v1.5 DOM-free run session is now the shared browser/test authority for physics, hazards, platforms, scoring, crash/respawn, and finish transitions. Checkpoints restore exact hazard and triggered-platform snapshots. Full keyboard/touch/gamepad restart smoke, presentation reset ownership, and further browser-module extraction remain open, so U02 stays partial.
 
-### U03 / v1.5 — Smooth Ride Pass
+### U03 / v1.5–v1.6 — Smooth Ride Pass
 
-**Status:** PARTIAL FOUNDATION
+**Status:** RELEASE CANDIDATE
 
 **Player promise:** No stuck throttle after interruptions, fewer frame hitches, and crisp play on normal phones.
 
@@ -65,7 +65,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** A fixed run produces the same tick hash; controls clear after pointer cancel, window blur, visibility loss, and rotation; hot-path object counts stay bounded; agreed mobile profile reaches p95 frame time below 16.7 ms.
 
-**Current evidence:** Replay tests reproduce a fixed physics finish tick and canonical state hash, and existing Pointer Event cleanup covers cancel/focus-loss paths in the browser client. Particle pooling, allocation instrumentation, rotation smoke evidence, and a measured mobile p95 budget remain open.
+**Current evidence:** The v1.6 Smooth Ride candidate satisfies the local gate with fixed hard bounds of 384 particle, 32 popup, and 220 track identities (636 total), deterministic oldest-active eviction, stale-lease protection, storage reuse, and allocation-free active iteration. Input ownership is extracted into a DOM-free state machine with 17 tests covering keyboard, multi-pointer, gamepad, development input, remapping, pointer cancel/lost capture, blur/hidden/rotation clearing, pause recommendations, bounded churn, and left-hand layout metadata. Steady gamepad polling reuses scratch state once per rendered frame and suppresses unchanged diagnostics. A typed-ring performance recorder has 6 tests for exact p50/p95/p99 statistics, catch-up/backlog/drop counters, viewport/DPR/rotation events, detached snapshots, reset reuse, and long bounded churn; the frame loop now exposes real post-budget backlog and bounded dropped time. The final clean installed-Chrome gate measured p95 frame time of 7.10 ms at 1280 × 720 DPR 1 and 10.70 ms at 390 × 844 DPR 2, while also passing disjoint/unclipped 320 × 568 control geometry, simultaneous touch, cancel, blur, 844 × 390 rotation, and left-hand UI assertions. The fixed Gold proof gate still reproduces all 15 courses twice with `physics-3` and `course-3`; tokens were regenerated only because build compatibility advanced to `1.6.0`, not because authoritative simulation changed. Cached gradients, visible terrain slicing, scalar camera/ragdoll lookups, and reusable engine/UI/input/effect state remove the audited hot-path allocations. A physical low-end phone and the deployed production build remain required before making a universal device-performance claim.
 
 ### U04 / v1.6 — Collision Keystone
 
@@ -385,7 +385,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** Layout matrix from 320×568 through tablet passes; all focus-loss paths release controls; contrast/reduced-motion audit passes; touch, keyboard, and gamepad smoke tests pass.
 
-**Current evidence:** Responsive touch controls, Pointer Event cancellation, focus-loss cleanup, haptics toggle, system-aware reduced motion, static reduced-motion crashes, and scalable menus are playable. Remapping, left-handed controls, high contrast, safe-area and minimum-target measurement, and the full device/input matrix remain open.
+**Current evidence:** Responsive touch controls, disjoint and unclipped 320 × 568 minimum-width targets, Pointer Event cancellation, focus-loss cleanup, separate music/SFX sliders, haptics toggle, system-aware reduced motion, static reduced-motion crashes, persisted left-handed controls, and scalable menus are playable. A player-facing remapping UI, high contrast, safe-area inset handling, and the full physical-device/input matrix remain open.
 
 ### U28 / v4.0 — Fast Boot and Distribution
 
@@ -425,15 +425,16 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Immediate execution queue
 
-After the v1.5 Gold Standard candidate reaches a stable final diff:
+After the v1.6 Smooth Ride candidate reaches a stable final diff:
 
-1. Run the complete 3-asset / 44-system / 15-route / 30-browser-replay gate, finish the remaining input/accessibility smoke matrix, deploy, and verify the production cache and visible `v1.5.0` label.
-2. Finish U02 with keyboard/touch/gamepad restart parity, explicit reset ownership for every presentation subsystem, and additional renderer/input/audio/persistence extraction.
-3. Finish U03 with pools, allocation/frame instrumentation, rotation tests, and a measured mobile p95 budget.
-4. Finish U04/U10 with force zones, broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
-5. Finish U05/U07 presentation acceptance with original rider-part polish, browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
-6. Record human keyboard/touch references for all 15 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
-7. Build PB Echoes and challenge links on the now campaign-proven tape format, keeping version mismatch and storage pruning explicit.
+1. Run and record the complete 3-asset / 76-system / 15-route / 30-Gold-replay / 2-browser-profile gate, promote only after review, and verify the production cache, install/offline path, and visible `v1.6.0` label.
+2. Repeat performance and interruption smoke on a deliberately low-end physical phone plus representative iOS/Android, keyboard, multitouch, and real-gamepad paths. Keep these results separate from the named local headless-Chrome measurements.
+3. Finish U02 with physical keyboard/touch/gamepad restart and results-flow parity, explicit reset ownership for remaining presentation subsystems, and additional renderer/audio/persistence extraction.
+4. Continue U04 with DOM-free force-zone contracts, deterministic/reset fixtures, proxy alignment, and dormant-baseline proof before authoring force-zone course content.
+5. Continue U10 only after that contract with broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
+6. Finish U05/U07 presentation acceptance with original rider-part polish, physical-browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
+7. Record human keyboard/touch references for all 15 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
+8. Build PB Echoes and challenge links on the campaign-proven tape format, keeping version mismatch and storage pruning explicit.
 
 ## Update discipline
 

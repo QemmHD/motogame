@@ -2,6 +2,67 @@
 
 All notable Moto Rush X3 changes are recorded here so development can resume without reconstructing old decisions from source code. Dates use YYYY-MM-DD.
 
+## [1.6.0] — 2026-07-13 — Smooth Ride (release candidate)
+
+This candidate completes the local U03 Smooth Ride acceptance gate. It is not described as production-live or proven on low-end physical hardware until review, eligible-branch publishing, canonical Pages/cache/offline smoke, and real-device checks are complete.
+
+### Added
+
+- A DOM-free bounded effect-pool module with unique leases, per-slot generations, deterministic oldest-active eviction, stale-release protection, clear-without-storage-reallocation, allocation-free active iteration, stable live statistics, and schema/custom-initializer modes.
+- Three integrated presentation pools with hard identity limits: 384 particles, 32 popups, and 220 tracks—636 total reusable effect slots regardless of long-run churn.
+- A DOM-free input state machine that aggregates keyboard, simultaneous pointers, gamepad snapshots, and development input without one source suppressing another.
+- Explicit pointer end/cancel/lost-capture ownership, lifecycle clearing for blur, hidden documents, rotation, and manual resets, plus browser-consumable pause recommendations and detached diagnostic telemetry.
+- Configurable keyboard/gamepad mappings, reusable fixed-tick command reads, and left-handed command-cluster metadata. The settings UI now persists and visibly applies a left-hand touch layout.
+- A DOM-free typed-ring performance recorder for frame time, fixed ticks, backlog, clamped/dropped time, active/pooled effect counts, viewport/DPR/rotation state, focus/cancel events, and detached p50/p95/p99 reports.
+- A live `?dev&performance` overlay showing rolling frame percentiles, tick pressure, effect activity/capacity/reuse/eviction, viewport/DPR, and interruption counters.
+- A repeatable installed-Chrome browser gate with desktop 1280 × 720 DPR 1 and mobile 390 × 844 DPR 2 profiles, bounded-pool assertions, page/console error checks, and a mobile interruption matrix.
+- Eight versioned v1.6 QA captures covering desktop/mobile telemetry, live pooled effects, left-handed play/settings, a 320 × 568 minimum-width control pair, and safe portrait-to-landscape rotation.
+- An explicit ISC license plus a storefront README, versioned release gallery, QA hub, and durable pickup records.
+- Nine effect-pool tests, 17 input-state tests, and 6 performance-metrics tests, raising deterministic system coverage from 44 to 76 subtests.
+
+### Changed
+
+- Runtime/package identity advances to `1.6.0`; replay schema remains `1`, physics remains `physics-3`, and course generation remains `course-3`.
+- Browser ride commands now flow through `input-state.js`; `game.js` remains the DOM adapter for event coordinates, shortcuts, lifecycle events, navigator gamepad reads, and pause/UI policy.
+- Connected gamepads are polled once per rendered frame through reusable scratch state. Unchanged aggregate commands no longer emit or shift diagnostic events during steady controller play.
+- Particles, popups, and tire tracks now acquire reusable identities and release them in place instead of allocating unbounded objects, shifting arrays, or filtering new arrays every fixed tick.
+- Each animation frame records raw/clamped wall time, consumed fixed ticks, real post-budget accumulator backlog, dropped time, and effect-pool state without adding wall-clock values to authoritative simulation or replay proofs. A five-tick frame budget and six-tick backlog ceiling prevent an unbounded catch-up spiral.
+- Sky and terrain gradients are cached, terrain drawing searches only the visible point slice, camera and crash-ragdoll calculations reuse scalar/lookup state, and engine, menu, settings, and control-display paths reuse previously allocated structures where practical.
+- Rotation rebuilds the canvas/control geometry, clears held commands, records telemetry, and pauses active play before the resized frame can inherit stale touch input.
+- Repository Gold tokens were regenerated for the required build-version compatibility change only. Their authoritative `physics-3` / `course-3` behavior did not change.
+- The full npm gate now includes the two-profile browser-performance and interruption harness after assets, 76 systems tests, 15 headless routes, and 30 Gold replay passes.
+
+### Fixed
+
+- Touch throttle or lean can no longer remain held after `pointercancel`, lost pointer capture, window blur, a hidden document, or viewport rotation.
+- Replacing a gamepad or development-input snapshot can no longer leave commands from the previous snapshot stuck.
+- Simultaneous touch controls are aggregated independently, so releasing or cancelling one pointer does not release the other pointer's command.
+- Standard and left-handed control geometry now fits at 320 × 568 with every target inside the viewport and opposing Gas/Brake or Lean hit circles strictly disjoint.
+- Long effect-heavy runs can no longer grow particle, popup, or track identity counts beyond their declared capacities; exhausted pools evict predictably instead of extending storage.
+- Per-tick effect cleanup no longer allocates replacement arrays, and repeated tire tracks no longer require front-array shifts.
+- Performance samples and event counts reject non-finite input, clamp configured bounds, retain exact newest-window ordering across ring wrap, and reset while reusing their typed buffers.
+- Pages publishing is restricted to a successful push on `main`; pull requests and manual dispatches run tests without publishing, and the stale legacy release branch can no longer deploy production.
+
+### Verification
+
+- **Asset/offline:** 3 subtests cover syntax, local references, literal precache completeness, and the three new runtime modules.
+- **Deterministic systems:** 76 subtests—44 prior rules/replay/kinematics/ragdoll/session/proxy tests plus 9 effect-pool, 17 input-state, and 6 performance-metrics tests.
+- **Physics/routes:** all 15 authored courses pass the unchanged `physics-3` / `course-3` headless completion and stability gate.
+- **Gold Runs:** all 15 build-compatible references replay twice in clean browser contexts—30 exact passes with no divergence.
+- **Desktop profile:** the final clean local headless-Chrome gate at 1280 × 720 DPR 1 measured p95 7.10 ms.
+- **Mobile profile:** the final clean local headless-Chrome gate at 390 × 844 DPR 2 measured p95 10.70 ms, then passed 390 × 844 and 320 × 568 disjoint/unclipped control geometry, simultaneous touch, pointer cancel, blur pause/clear, 844 × 390 rotation pause/clear, canvas resize, telemetry counters, and left-hand layout assertions.
+- **Bounded effects:** browser telemetry and direct tests confirm 384/32/220 hard capacities, 636 total, with created and peak identities never exceeding their owning pool.
+- **Visual QA:** eight reviewed screenshots are stored under `docs/screenshots/v1.6/`.
+
+The browser timings are repeatable evidence for the named local Chrome profiles, not a claim that every phone will match them. Headless rendering, host hardware, drivers, thermal state, installed mode, and production service-worker behavior can all differ from a physical device.
+
+### Remaining before production sign-off
+
+- Merge through an eligible branch, verify visible `v1.6.0`, Pages workflow success, cache replacement, installability, and offline reload at the canonical URL.
+- Run keyboard, multitouch, physical gamepad, audio, haptics, reduced-motion, crash/retry, Gold Run, background/foreground, and repeated portrait/landscape smoke on representative real devices, including a deliberately low-end phone.
+- Record production performance results separately from the local headless profiles and retain screenshots/console evidence.
+- Continue U04 with force-zone contracts and fixtures before broadening moving/closed collision geometry; do not change `physics-3` or Gold compatibility accidentally.
+
 ## [1.5.0] — 2026-07-13 — Gold Standard (release candidate)
 
 This candidate is integrated on the feature branch and is not described as production-live until review, eligible-branch publishing, and canonical Pages/cache/offline smoke testing are complete.

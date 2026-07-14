@@ -42,12 +42,14 @@ export const STR = {
   // control hints
   hintKeys: '▲ gas   ▼ brake   ◀ lean back / backflip   ▶ lean forward / frontflip',
   hintTouch: 'Left buttons lean · right buttons gas & brake · lean back to land flips',
+  hintTouchLeft: 'Left buttons gas & brake · right buttons lean · lean back to land flips',
   hintCompact: 'GAS · BRAKE · LEAN · FLIP',
   gas: 'GAS', brake: 'BRAKE', leanL: '↺', leanR: '↻',
   sound: 'SOUND',
   // v1.1 additions
   settings: 'SETTINGS', music: 'MUSIC', sfx: 'SFX', motion: 'REDUCED MOTION',
-  haptics: 'VIBRATION', muteAll: 'MUTE ALL', on: 'ON', off: 'OFF', close: 'CLOSE',
+  haptics: 'VIBRATION', leftHanded: 'LEFT-HAND CONTROLS',
+  muteAll: 'MUTE ALL', on: 'ON', off: 'OFF', close: 'CLOSE',
   install: 'INSTALL', score: 'SCORE', bigAir: 'BIG AIR!', nearMiss: 'NEAR MISS!',
   landingPerfect: 'PERFECT LANDING!', landingClean: 'CLEAN LANDING!',
   landingRough: 'ROUGH LANDING', landingSlam: 'HARD SLAM',

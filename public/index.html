@@ -18,7 +18,17 @@
     touch-action: none; overscroll-behavior: none; }
   #c { display: block; width: 100vw; height: 100vh; }
   #dev { position: fixed; top: 4px; left: 4px; color: #6f6; font: 12px monospace;
-    display: none; text-shadow: 0 1px 2px #000; z-index: 10; }
+    display: none; white-space: pre; pointer-events: none; text-shadow: 0 1px 2px #000; z-index: 10; }
+  #dev.performance { top: 82px; left: auto; right: 12px; color: #dff8ff;
+    padding: 12px 14px; border: 1px solid rgba(85,216,255,.72); border-radius: 12px;
+    background: linear-gradient(145deg, rgba(7,13,20,.94), rgba(13,25,37,.88));
+    box-shadow: 0 12px 36px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.06);
+    font: 700 11px/1.52 ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: .15px; text-shadow: none; }
+  @media (max-width: 520px) {
+    #dev.performance { top: 62px; right: 8px; max-width: calc(100vw - 44px);
+      padding: 9px 11px; font-size: 9px; line-height: 1.42; }
+  }
   #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     color: #ffd23e; font-weight: 800; letter-spacing: 2px; background: #12141d; z-index: 5; }
 </style>

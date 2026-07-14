@@ -1,11 +1,11 @@
 name: Test and publish game
 
-# Pull requests run the release gate. Pushes to a release branch also publish
-# public/ to gh-pages after every test passes.
+# Pull requests into main run the release gate. Only a successful push to main
+# may publish public/ to gh-pages; manual runs are test-only.
 
 on:
   push:
-    branches: [main, claude/moto-x3m-bike-game-ipwi7p]
+    branches: [main]
     paths:
       - 'public/**'
       - 'tools/**'
@@ -13,7 +13,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/pages.yml'
   pull_request:
-    branches: [main, claude/moto-x3m-bike-game-ipwi7p]
+    branches: [main]
     paths:
       - 'public/**'
       - 'tools/**'
@@ -46,7 +46,7 @@ jobs:
 
   publish:
     needs: test
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

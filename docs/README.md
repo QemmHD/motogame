@@ -4,9 +4,14 @@ This directory is organized as the permanent visual and engineering record for t
 
 ## Latest release candidate
 
-- [v1.5.0 — Gold Standard](releases/v1.5.0.md): player-facing update brief, screenshots, implementation notes, verification, and honest remaining gaps.
+- [v1.6.0 — Smooth Ride](releases/v1.6.0.md): bounded effects, live frame telemetry, interruption-safe input, left-handed controls, screenshots, verification, and honest remaining gaps.
+- [Performance and interruption QA](qa/PERFORMANCE.md): exact desktop/mobile profiles, measured percentiles, budgets, harness behavior, input matrix, reproduction commands, and limitations.
 - [Golden run QA](qa/GOLDEN_TAPES.md): all 15 repository-owned recovery tapes, exact results, reproduction commands, and limitations.
-- [Screenshot archive](screenshots/README.md): versioned desktop, gameplay, debug, proof, and mobile captures.
+- [Screenshot archive](screenshots/README.md): versioned desktop, gameplay, debug, proof, performance, rotation, accessibility, and mobile captures.
+
+## Archived release candidates
+
+- [v1.5.0 — Gold Standard](releases/v1.5.0.md): repository-owned Gold Runs, trigger-controlled platforms, collision proxy tooling, and the v1.5 visual record.
 
 ## Engineering reference
 
@@ -19,4 +24,4 @@ This directory is organized as the permanent visual and engineering record for t
 
 ## Store presentation
 
-`cover.png` is the repository hero. The current store-style gallery lives under `screenshots/v1.5/`; previous evidence stays versioned instead of being overwritten.
+`cover.png` is the repository hero. The current store-style gallery lives under [`screenshots/v1.6/`](screenshots/v1.6/README.md); previous evidence stays versioned instead of being overwritten.

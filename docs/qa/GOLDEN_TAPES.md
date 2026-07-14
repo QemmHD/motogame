@@ -8,10 +8,15 @@ Compatibility identity:
 |---|---|
 | Manifest schema | `1` |
 | Replay schema | `1` |
-| Runtime build | `1.5.0` |
+| Runtime build | `1.6.0` |
 | Physics | `physics-3` |
 | Course generator | `course-3` |
 | Route class | `recovery` |
+
+Manifest SHA-256 for this candidate: `368D4728F9D60F9A07C1375AF3B9D5B18FEC8200A030633CC2679A2DB7701C08`.
+The v1.6 regeneration was required by the intentional build-compatibility bump. Physics remains
+`physics-3`, course generation remains `course-3`, and every finish tick, run tick, time, score,
+recovery count, and authoritative state hash stayed equal to the reviewed v1.5 catalog.
 
 ## Current reference catalog
 
