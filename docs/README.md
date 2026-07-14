@@ -4,13 +4,14 @@ This directory is organized as the permanent visual and engineering record for t
 
 ## Latest release candidate
 
-- [v1.7.0 — Vector Weave](releases/v1.7.0.md): original Kinetic Loom force fields, a new teaching route, swept field detection, collision-aligned proxies, four screenshots, compatibility refresh, and exact local gate evidence.
-- [Performance and interruption QA](qa/PERFORMANCE.md): exact desktop/mobile profiles, measured percentiles, budgets, harness behavior, input matrix, reproduction commands, and limitations.
-- [Golden run QA](qa/GOLDEN_TAPES.md): all 16 repository-owned recovery tapes, exact results, reproduction commands, and limitations.
+- [v1.8.0 — Crash Theater](releases/v1.8.0.md): original code-native 17-part Splitline rig, ten cause profiles, detached swept contact, bounded impact records, seeded feedback, Reduced Motion invariants, compatibility boundary, complete local gates, four inspected captures, and explicit hosted/production limits.
+- [Performance and interruption QA](qa/PERFORMANCE.md): exact v1.8 ordinary and live-crash browser profiles, preserved v1.7 references, budgets, harness behavior, input matrix, reproduction commands, and limitations.
+- [Golden run QA](qa/GOLDEN_TAPES.md): all 16 build-refreshed repository recovery tapes, exact unchanged outcomes, reproduction commands, and limitations.
 - [Screenshot archive](screenshots/README.md): versioned desktop, gameplay, debug, proof, performance, rotation, accessibility, and mobile captures.
 
 ## Archived release candidates
 
+- [v1.7.0 — Vector Weave](releases/v1.7.0.md): original Kinetic Loom force fields, a new teaching route, swept field detection, collision-aligned proxies, four inspected screenshots, compatibility refresh, and exact local/hosted gate evidence.
 - [v1.6.0 — Smooth Ride](releases/v1.6.0.md): bounded effects, live frame telemetry, interruption-safe input, and left-handed controls.
 - [v1.5.0 — Gold Standard](releases/v1.5.0.md): repository-owned Gold Runs, trigger-controlled platforms, collision proxy tooling, and the v1.5 visual record.
 
@@ -25,4 +26,4 @@ This directory is organized as the permanent visual and engineering record for t
 
 ## Store presentation
 
-`cover.png` is the repository hero. The current store-style gallery lives under [`screenshots/v1.7/`](screenshots/v1.7/README.md); previous evidence stays versioned instead of being overwritten.
+`cover.png` is the repository hero. The current store-style gallery lives under [`screenshots/v1.8/`](screenshots/v1.8/README.md) and contains inspected desktop hero, ragdoll-proxy, mobile DPR 2, and Reduced Motion captures. The inspected [`screenshots/v1.7/`](screenshots/v1.7/README.md) gallery remains preserved instead of being overwritten.

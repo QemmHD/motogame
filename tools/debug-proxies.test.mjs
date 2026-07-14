@@ -247,6 +247,173 @@ test('force-zone proxies preserve exact field bounds and clipped direction arrow
   assert.deepEqual(forceZones, before, 'force-zone proxy mutations leaked into runtime state');
 });
 
+test('ragdoll proxies detach node circles, velocity sweeps, links, bounds, and contact metrics', () => {
+  const ragdollPose = {
+    active: true,
+    settled: false,
+    reducedMotion: false,
+    settleReason: null,
+    elapsed: 0.75,
+    ticks: 90,
+    contactCount: 9,
+    impactCount: 4,
+    pendingImpacts: 1,
+    droppedImpacts: 2,
+    peakImpact: 640,
+    brokenTethers: 3,
+    rmsSpeed: 48,
+    peakSpeed: 900,
+    invalidRecoveries: 1,
+    velocityClamps: 2,
+    worldClamps: 3,
+    lastImpact: {
+      tick: 89,
+      node: 'helmet',
+      group: 'rider',
+      x: 29,
+      y: 40,
+      nx: 0,
+      ny: -1,
+      speed: 640,
+      strength: 0.3,
+      surface: 'metal',
+      kind: 'platform',
+      id: 'lift-a',
+    },
+    nodes: [
+      {
+        id: 'hip',
+        group: 'rider',
+        x: 10,
+        y: 20,
+        radius: 3,
+        vx: 100,
+        vy: 10,
+        previous: { x: 8, y: 19 },
+        contacts: 3,
+      },
+      {
+        id: 'helmet',
+        group: 'rider',
+        x: 30,
+        y: 40,
+        radius: 5,
+        vx: 20,
+        vy: -10,
+        contacts: 0,
+      },
+    ],
+    links: [{ a: 'hip', b: 'helmet', rest: 24, stiffness: 0.8, kind: 'structure' }],
+  };
+  const before = structuredClone(ragdollPose);
+  const snapshot = buildDebugProxySnapshot({ ragdollPose }, { ragdollSweepDt: 0.1 });
+  const proxy = snapshot.ragdoll;
+
+  assert.equal(proxy.active, true);
+  assert.equal(proxy.circles.length, 2);
+  assert.equal(proxy.sweeps.length, 2);
+  assert.deepEqual(proxy.circles[0], {
+    id: 'hip',
+    index: 0,
+    group: 'rider',
+    current: { x: 10, y: 20, r: 3 },
+    previous: { x: 8, y: 19, r: 3 },
+    velocity: { x: 100, y: 10 },
+    contacts: 3,
+  });
+  assert.deepEqual(proxy.sweeps[1], {
+    id: 'helmet',
+    group: 'rider',
+    x0: 28,
+    y0: 41,
+    x1: 30,
+    y1: 40,
+    r: 5,
+  });
+  assert.deepEqual(proxy.bounds,
+    { left: 5, right: 35, top: 16, bottom: 46, empty: false });
+  assert.deepEqual(proxy.links[0], {
+    id: 'ragdoll-link-0',
+    index: 0,
+    kind: 'structure',
+    a: 'hip',
+    b: 'helmet',
+    aPoint: { x: 10, y: 20 },
+    bPoint: { x: 30, y: 40 },
+    rest: 24,
+    stiffness: 0.8,
+    resolved: true,
+  });
+  assert.equal(proxy.contactMetrics.total, 9);
+  assert.equal(proxy.contactMetrics.nodeContactSum, 3);
+  assert.equal(proxy.contactMetrics.touchedNodes, 1);
+  assert.equal(proxy.contactMetrics.impactCount, 4);
+  assert.equal(proxy.contactMetrics.lastImpact.surface, 'metal');
+  assert.deepEqual(proxy.truncated, { nodes: 0, links: 0 });
+  assert.deepEqual(ragdollPose, before);
+
+  proxy.circles[0].current.x = -100;
+  proxy.links[0].aPoint.x = -200;
+  proxy.contactMetrics.lastImpact.surface = 'MUTATED';
+  assert.deepEqual(ragdollPose, before, 'ragdoll proxy mutations leaked into presentation state');
+});
+
+test('ragdoll proxy limits sanitize malformed nodes and links with explicit truncation', () => {
+  const ragdollPose = {
+    active: 'yes',
+    elapsed: Infinity,
+    ticks: -Infinity,
+    contactCount: Infinity,
+    peakImpact: Infinity,
+    nodes: [
+      { id: 'a', x: Infinity, y: NaN, radius: Infinity, vx: -Infinity, contacts: Infinity },
+      { id: 'b', x: -1e30, y: 1e30, r: -1e20, oldX: Infinity, oldY: -Infinity },
+      { id: 'c', x: 3, y: 4, radius: 5 },
+      { id: 'd', x: 6, y: 7, radius: 8 },
+    ],
+    links: [
+      { a: 'a', b: 'b', rest: Infinity, stiffness: Infinity },
+      { a: 'b', b: 'c', rest: 2, stiffness: 0.5 },
+      { a: 'c', b: 'd', rest: 3, stiffness: 0.5 },
+    ],
+    lastImpact: {
+      x: Infinity,
+      y: NaN,
+      nx: Infinity,
+      ny: -Infinity,
+      speed: Infinity,
+      strength: Infinity,
+    },
+  };
+  const before = structuredClone(ragdollPose);
+  const snapshot = buildDebugProxySnapshot({ ragdollPose }, {
+    maxRagdollNodes: 2,
+    maxRagdollLinks: 1,
+    maxCoordinate: 100,
+    maxRadius: 10,
+    ragdollSweepDt: Infinity,
+  });
+
+  assert.equal(snapshot.ragdoll.circles.length, 2);
+  assert.equal(snapshot.ragdoll.sweeps.length, 2);
+  assert.equal(snapshot.ragdoll.links.length, 1);
+  assert.deepEqual(snapshot.ragdoll.sourceCounts, { nodes: 4, links: 3 });
+  assert.deepEqual(snapshot.ragdoll.truncated, { nodes: 2, links: 2 });
+  assert.equal(snapshot.ragdoll.active, false, 'truthy malformed flags must not become booleans');
+  assert.ok(snapshot.ragdoll.circles.every((circle) =>
+    Math.abs(circle.current.x) <= 100 && Math.abs(circle.current.y) <= 100
+      && circle.current.r <= 10));
+  assertAllNumbersFinite(snapshot.ragdoll);
+  assert.deepEqual(ragdollPose, before);
+
+  const hardLimits = buildDebugProxySnapshot({}, {
+    maxRagdollNodes: 1e20,
+    maxRagdollLinks: 1e20,
+  }).limits;
+  assert.equal(hardLimits.maxRagdollNodes, 2048);
+  assert.equal(hardLimits.maxRagdollLinks, 8192);
+});
+
 test('malformed oversized inputs are finite, bounded, detached, and report truncation', () => {
   const makeSegment = (index) => ({
     ax: index % 2 ? Infinity : index * 1e20,

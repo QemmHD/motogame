@@ -2,6 +2,22 @@
 
 Every release-candidate gallery is kept in its own directory. These files are real browser captures of the repository runtime, not concept art.
 
+## v1.8.0 — Crash Theater
+
+<p align="center">
+  <img src="v1.8/update-v18-crash-hero.png" alt="17-part Splitline Crash Theater hero" width="900">
+</p>
+
+| Exact ragdoll proxies | Reduced Motion |
+|:---:|:---:|
+| ![Crash Theater collision circles, sweeps, links, and contacts](v1.8/update-v18-ragdoll-proxies.png) | ![Static Splitline pose under Reduced Motion](v1.8/update-v18-reduced-motion.png) |
+
+<p align="center">
+  <img src="v1.8/update-v18-mobile-crash.png" alt="Crash Theater at 390 by 844 and DPR 2" width="300">
+</p>
+
+See the [v1.8 capture record](v1.8/README.md) for fixed staging state, output sizes, state and PNG hashes, determinism method, full-resolution review, and evidence limits.
+
 ## v1.7.0 — Vector Weave
 
 <p align="center">

@@ -10,3 +10,4 @@ spikes,ground hazard object,sprite,row of sharp metal spikes on a base with haza
 checkpoint,checkpoint marker,sprite,tall checkpoint flag pole with blue-and-white pennant,2:3 1k keyed,FORMULA,generate
 finish,level finish marker,sprite,black-and-white checkered finish flag on a pole,2:3 1k keyed,FORMULA,generate
 bike_body,wheel-less bike + rider,sprite,detailed red/black motocross dirt bike with helmeted rider on green key (wheels omitted for rigging),3:2 1k keyed,nano_banana_pro,generate+chroma-key
+splitline_crash_rig,Crash Theater detached bike and rider,canvas-model,"17-part original Splitline rig with segmented limbs, joint armor, reflective seams, helmet visor, trellis frame, engine, shrouds, fork, swingarm, rims, spokes, and tires",resolution-independent,v1.8 Crash Theater,code-native

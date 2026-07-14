@@ -509,4 +509,12 @@ test('a head sweep crashes even while a wheel contacts the same platform', () =>
   assert.ok(contacts.some(contact => contact.node === 'rear'), 'wheel contact was not established');
   assert.ok(contacts.some(contact => contact.node === 'head'), 'head sweep was skipped');
   assert.equal(bike.crashed, true);
+  assert.deepEqual(bike.crashContact, {
+    type: 'platform',
+    id: 'simultaneous-contact',
+    platformId: 'simultaneous-contact',
+    x: 4,
+    y: 79,
+    surface: 'metal',
+  });
 });

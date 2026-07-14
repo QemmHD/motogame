@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildTerrain, terrainContact } from '../public/physics.js';
+import { createCrashContactField, queryCrashContact } from '../public/crash-contact.js';
+import { normalizeCrashCause } from '../public/crash-presentation.js';
 import {
   RAGDOLL_DEFAULTS,
   createRagdoll,
+  drainRagdollImpacts,
   ragdollAngle,
   readRagdoll,
   stepRagdoll,
@@ -14,7 +17,8 @@ const FIXED_DT = 1 / 120;
 const REQUIRED_PARTS = [
   'rearWheel', 'frontWheel', 'bikeFrame', 'seat', 'handlebar',
   'hip', 'torso', 'head', 'helmet',
-  'rearHand', 'frontHand', 'rearFoot', 'frontFoot',
+  'rearElbow', 'frontElbow', 'rearHand', 'frontHand',
+  'rearKnee', 'frontKnee', 'rearFoot', 'frontFoot',
 ];
 
 function crashSnapshot(index) {
@@ -78,6 +82,50 @@ function flatTerrain() {
   };
 }
 
+const CRASH_MATRIX_CAUSES = Object.freeze(['terrain', 'platform', 'saw', 'mace', 'crusher', 'tnt']);
+const CRASH_MATRIX_WORLDS = Object.freeze([
+  { name: 'flat-dirt', slope: 0, surface: 'dirt' },
+  { name: 'uphill-gravel', slope: -0.18, surface: 'gravel' },
+  { name: 'downhill-ice', slope: 0.035, surface: 'ice' },
+  { name: 'ledge-endpoint', slope: -0.06, surface: 'dirt', endpoint: true },
+  { name: 'frozen-deck', slope: 0.04, surface: 'grated', platform: true },
+]);
+
+function crashMatrixContact(source, world) {
+  const left = source.x - 6200;
+  const right = source.x + 6200;
+  const groundY = 370;
+  const terrain = buildTerrain([[{
+    x: left,
+    y: groundY - world.slope * (source.x - left),
+    surface: world.surface,
+  }, {
+    x: world.endpoint ? source.x + 520 : right,
+    y: groundY + world.slope * (world.endpoint ? 520 : right - source.x),
+    surface: world.surface,
+  }], ...(world.endpoint ? [[
+    { x: source.x + 500, y: groundY + 420, surface: 'dirt' },
+    { x: right, y: groundY + 420, surface: 'dirt' },
+  ]] : [])]);
+  const platformTop = groundY - 22;
+  const kinematics = world.platform ? { platforms: [{
+    id: 'matrix-deck',
+    current: {
+      x: source.x,
+      y: platformTop + 10,
+      width: 260,
+      height: 20,
+      left: source.x - 130,
+      right: source.x + 130,
+      top: platformTop,
+      bottom: platformTop + 20,
+      surface: 'grated',
+    },
+  }] } : null;
+  const field = createCrashContactField(terrain, kinematics);
+  return (x, y, radius, node) => queryCrashContact(field, x, y, radius, node);
+}
+
 function assertFiniteAndBounded(pose, origin) {
   assert.ok(Number.isFinite(pose.elapsed));
   assert.ok(Number.isFinite(pose.rmsSpeed));
@@ -109,41 +157,50 @@ function assertConstraintStability(pose) {
   }
 }
 
-test('30 scripted crashes stay finite, stable and settle on terrain', () => {
+test('30 named cause/world crashes stay finite, deterministic and settle by both groups', () => {
   for (let index = 0; index < 30; index++) {
+    const cause = CRASH_MATRIX_CAUSES[Math.floor(index / CRASH_MATRIX_WORLDS.length)];
+    const world = CRASH_MATRIX_WORLDS[index % CRASH_MATRIX_WORLDS.length];
+    const scenario = `${cause}/${world.name}`;
     const source = crashSnapshot(index);
     const sourceBefore = structuredClone(source);
-    const { groundY, contact } = flatTerrain();
-    const ragdoll = createRagdoll(source, {
-      contact,
-      impulse: {
-        x: ((index % 3) - 1) * 85,
-        y: -35 - (index % 4) * 24,
-        spin: ((index % 5) - 2) * 0.28,
-      },
-    });
-    const origin = { x: source.x, y: source.y };
-    let pose = readRagdoll(ragdoll);
-    assert.deepEqual(pose.nodes.map((node) => node.id), REQUIRED_PARTS);
-
-    for (let frame = 0; frame < 13 * 60 && !ragdoll.settled; frame++) {
-      stepRagdoll(ragdoll, 1 / 60);
-      if (frame % 20 === 0) {
-        pose = readRagdoll(ragdoll);
-        assertFiniteAndBounded(pose, origin);
-        assertConstraintStability(pose);
+    const profile = normalizeCrashCause({ type: cause, intensity: 0.82 });
+    const run = () => {
+      const contact = crashMatrixContact(source, world);
+      const ragdoll = createRagdoll(source, {
+        contact,
+        impulse: { spin: profile.riderImpulse.spin },
+        riderImpulse: { x: profile.riderImpulse.radial * (index % 2 ? -1 : 1),
+          y: -profile.riderImpulse.lift },
+        bikeImpulse: { x: profile.bikeImpulse.radial * (index % 2 ? -1 : 1),
+          y: -profile.bikeImpulse.lift },
+        releaseTethers: profile.releaseTethers,
+      });
+      const origin = { x: source.x, y: source.y };
+      let pose = readRagdoll(ragdoll);
+      assert.deepEqual(pose.nodes.map((node) => node.id), REQUIRED_PARTS, scenario);
+      for (let frame = 0; frame < 13 * 60 && !ragdoll.settled; frame++) {
+        stepRagdoll(ragdoll, 1 / 60);
+        if (frame % 20 === 0) {
+          pose = readRagdoll(ragdoll);
+          assertFiniteAndBounded(pose, origin);
+          assertConstraintStability(pose);
+        }
       }
-    }
-
-    pose = readRagdoll(ragdoll);
-    assertFiniteAndBounded(pose, origin);
-    assertConstraintStability(pose);
-    assert.equal(pose.settled, true, `script ${index} never settled`);
-    assert.equal(pose.settleReason, 'sleep', `script ${index} reached only the lifetime fallback`);
-    assert.ok(pose.contactCount > 0, `script ${index} never contacted terrain`);
-    assert.ok(pose.nodes.some((node) => node.contacts > 0 && node.y <= groundY + 1e-6),
-      `script ${index} did not settle against the ground`);
-    assert.deepEqual(source, sourceBefore, `script ${index} mutated its source bike`);
+      pose = readRagdoll(ragdoll);
+      assertFiniteAndBounded(pose, origin);
+      assertConstraintStability(pose);
+      assert.equal(pose.settled, true, `${scenario} never settled`);
+      assert.equal(pose.settleReason, 'sleep', `${scenario} reached only the lifetime fallback`);
+      assert.ok(pose.nodes.some((node) => node.group === 'bike' && node.contacts > 0),
+        `${scenario} bike never contacted its world`);
+      assert.ok(pose.nodes.some((node) => node.group === 'rider' && node.contacts > 0),
+        `${scenario} rider never contacted its world`);
+      assert.equal(pose.invalidRecoveries, 0, `${scenario} masked invalid solver state`);
+      return pose;
+    };
+    assert.deepEqual(run(), run(), `${scenario} did not replay exactly`);
+    assert.deepEqual(source, sourceBefore, `${scenario} mutated its source bike`);
   }
 });
 
@@ -291,4 +348,111 @@ test('contact friction and contact accounting apply once per physical substep', 
     assert.ok(Math.abs(oneIteration.first.nodes[index].vx - eightIterations.first.nodes[index].vx) < 1e-9);
     assert.ok(Math.abs(oneIteration.second.nodes[index].vx - eightIterations.second.nodes[index].vx) < 1e-9);
   }
+});
+
+test('initial telemetry is derived from capped node histories', () => {
+  const source = crashSnapshot(2);
+  const ragdoll = createRagdoll(source, {
+    velocityX: 1e9,
+    velocityY: -1e9,
+    angularVelocity: 1e7,
+    impulse: { x: 1e9, y: -1e9, spin: 1e6 },
+  });
+  const pose = readRagdoll(ragdoll);
+  const speeds = pose.nodes.map((node) => Math.hypot(node.vx, node.vy));
+  const expectedRms = Math.sqrt(speeds.reduce((sum, speed) => sum + speed * speed, 0)
+    / speeds.length);
+  assert.ok(speeds.every((speed) => speed <= RAGDOLL_DEFAULTS.maxSpeed + 1e-6));
+  assert.ok(Math.abs(pose.rmsSpeed - expectedRms) < 1e-7);
+  assert.ok(Math.abs(pose.peakSpeed - Math.max(...speeds)) < 1e-7);
+  assert.equal(pose.invalidRecoveries, 0);
+});
+
+test('renderer snapshots reuse buffers without exposing simulation state', () => {
+  const { contact } = flatTerrain();
+  const ragdoll = createRagdoll(crashSnapshot(6), { contact });
+  const target = {};
+  const first = readRagdoll(ragdoll, target);
+  const nodeBuffer = first.nodes;
+  const linkBuffer = first.links;
+  const firstNode = first.nodes[0];
+  stepRagdoll(ragdoll, 1 / 60);
+  const second = readRagdoll(ragdoll, target);
+  assert.equal(second.nodes, nodeBuffer);
+  assert.equal(second.links, linkBuffer);
+  assert.equal(second.nodes[0], firstNode);
+
+  const detached = readRagdoll(ragdoll);
+  detached.nodes[0].x = Infinity;
+  detached.links[0].rest = -1;
+  if (detached.lastImpact) detached.lastImpact.speed = Infinity;
+  const clean = readRagdoll(ragdoll);
+  assert.ok(Number.isFinite(clean.nodes[0].x));
+  assert.ok(clean.links[0].rest > 0);
+  assert.ok(!clean.lastImpact || Number.isFinite(clean.lastImpact.speed));
+});
+
+test('impact beats are deterministic, bounded, drainable and detached', () => {
+  const source = crashSnapshot(9);
+  const run = () => {
+    const ragdoll = createRagdoll(source, {
+      velocityX: 0,
+      velocityY: 900,
+      angularVelocity: 0,
+      contact: () => ({ pen: 0.01, nx: 0, ny: -1, friction: 0.2,
+        surface: 'steel', kind: 'platform', id: 'test-deck' }),
+      config: { gravity: 0, damping: 1, impactThreshold: 100, maxImpactEvents: 3,
+        minSettleTime: 10, maxLife: 20 },
+    });
+    stepRagdoll(ragdoll, FIXED_DT);
+    const before = readRagdoll(ragdoll);
+    const events = drainRagdollImpacts(ragdoll);
+    const after = readRagdoll(ragdoll);
+    return { ragdoll, before, events, after };
+  };
+  const first = run();
+  const second = run();
+  assert.equal(first.before.impactCount, REQUIRED_PARTS.length);
+  assert.equal(first.before.pendingImpacts, 3);
+  assert.equal(first.before.droppedImpacts, REQUIRED_PARTS.length - 3);
+  assert.equal(first.events.length, 3);
+  assert.ok(first.events.every((event) => event.surface === 'steel'
+    && event.kind === 'platform' && event.id === 'test-deck' && event.speed >= 100));
+  assert.equal(first.after.pendingImpacts, 0);
+  assert.deepEqual(first.events, second.events);
+  first.events[0].speed = Infinity;
+  assert.ok(Number.isFinite(readRagdoll(first.ragdoll).lastImpact.speed));
+});
+
+test('cause profiles can separate rider and bike while releasing only named tethers', () => {
+  const ragdoll = createRagdoll(crashSnapshot(12), {
+    velocityX: 0,
+    velocityY: 0,
+    angularVelocity: 0,
+    riderImpulse: { x: 220, y: -140 },
+    bikeImpulse: { x: -80, y: 30 },
+    releaseTethers: ['hip', 'rearHand', 'frontHand'],
+  });
+  const pose = readRagdoll(ragdoll);
+  const groupAverage = (group, axis) => {
+    const nodes = pose.nodes.filter((node) => node.group === group);
+    return nodes.reduce((sum, node) => sum + node[axis], 0) / nodes.length;
+  };
+  assert.ok(groupAverage('rider', 'vx') - groupAverage('bike', 'vx') > 250);
+  assert.ok(groupAverage('bike', 'vy') - groupAverage('rider', 'vy') > 130);
+  assert.equal(pose.brokenTethers, 3);
+  assert.ok(!pose.links.some((link) => link.kind === 'tether'
+    && (link.a === 'hip' || link.a === 'rearHand' || link.a === 'frontHand')));
+  assert.ok(pose.links.some((link) => link.kind === 'tether' && link.a === 'rearFoot'));
+});
+
+test('fixed-step partitioning is exact for equal elapsed presentation time', () => {
+  const source = crashSnapshot(19);
+  const run = (frames, dt) => {
+    const { contact } = flatTerrain();
+    const ragdoll = createRagdoll(source, { contact, impulse: { x: 31, y: -72, spin: 0.3 } });
+    for (let index = 0; index < frames; index++) stepRagdoll(ragdoll, dt);
+    return readRagdoll(ragdoll);
+  };
+  assert.deepEqual(run(120, 1 / 60), run(60, 1 / 30));
 });

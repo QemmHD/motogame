@@ -1,6 +1,6 @@
 # Moto Rush X3 — 30-Update Production Roadmap
 
-Updated: 2026-07-13
+Updated: 2026-07-14
 
 This is the canonical production plan. Every update has a player-facing promise, a bounded engineering/content scope, dependencies, and a release gate. Future pull requests must update this file when scope or status changes.
 
@@ -37,7 +37,7 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 **Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
 
-**Current evidence:** The v1.7 local gate contains 3 asset/offline subtests, 87 deterministic system subtests, a 16-level physics/rules route pass, 16 checked-in Gold proofs replayed twice (32 exact browser passes), and two repeatable browser-performance profiles. [Hosted PR Actions run 29307193559](https://github.com/QemmHD/motogame/actions/runs/29307193559) independently passed the same gate without publishing. The original 15 Gold outcomes and authoritative state hashes remain identical outside their versioned tokens. Local visual QA covers repository references, triggered ground, collision/Loom alignment, verified finish UI, responsive and rotated layouts, left-hand controls, Reduced Motion, mobile Kinetic Loom play, and live performance telemetry without page errors. Production URL, installed/offline cache replacement, and physical-device smoke evidence must still be recorded for the candidate actually deployed.
+**Current evidence:** The v1.8 local candidate passes the complete 3 asset / 108 system / 16 route / 32 Gold / 2 ordinary browser / 3 crash-browser gate. The final aggregate run measured ordinary callback-work p95 at 1.00 ms desktop and 0.81 ms mobile DPR 2; unfrozen crash p95 was 1.60 ms desktop and 1.50 ms mobile. All four deterministic Crash Theater captures were inspected at full resolution. The Gold refresh is build-only: schema `1`, `physics-4`, `course-4`, all 16 outcomes, and all authoritative state hashes remain identical to v1.7 outside version-bearing tokens. The preserved [v1.7 hosted run 29307193559](https://github.com/QemmHD/motogame/actions/runs/29307193559) passed its predecessor gate without publishing. v1.8 hosted PR Actions, production URL/cache replacement, installed/offline smoke, and physical-device coverage still require direct evidence.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -83,19 +83,19 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Phase II — Make every run satisfying
 
-### U05 / v1.7 — Crash Theater
+### U05 / v1.7–v1.8 — Crash Theater
 
-**Status:** PLAYABLE PREVIEW
+**Status:** RELEASE CANDIDATE
 
 **Player promise:** Crashes become spectacular, readable, and quick instead of feeling like an abrupt state change.
 
-**Ships:** Original segmented rider atlas; rider ejection; detached tumbling bike; terrain-contact ragdoll; camera handoff; short impact beat; reduced-motion alternative.
+**Ships:** Original code-native 17-part Splitline rider/bike model; ten cause-directed ejection profiles; detached tumbling bike; swept terrain/frozen-platform ragdoll contact; bounded impact queue; deterministic seeded FX; camera handoff; cause/retry card; collision proxies; Reduced Motion alternative.
 
 **Dependencies:** U02, U04.
 
-**Gate:** Crash bodies never alter authoritative run state; 30 scripted crash types remain finite and settle on terrain; reduced motion removes zoom and slow motion while preserving clear feedback.
+**Gate:** Crash bodies never alter authoritative run state; 30 scripted crash scenarios remain finite and settle on terrain; Reduced Motion removes zoom and slow motion while preserving clear feedback.
 
-**Current evidence:** The DOM-free crash simulation is presentation-only; 30 scripted crashes stay finite and settle, a repeated script is exact, and reduced motion returns a static non-simulating pose. The integrated renderer, terrain/platform contact, and camera handoff are playable. Final authored rider-part art, full browser crash matrix, and presentation tuning remain open.
+**Current evidence:** The v1.8 candidate keeps the authoritative `1.85` second retry timer, fixed-tick manual restart, replay schema `1`, `physics-4`, and `course-4` unchanged. Its DOM-free `1 / 120` crash simulation now drives the original 17-part Splitline model with articulated elbows/knees and cause-specific rider/bike separation. Ten immutable cause cards, detached crash reasons, natural terrain/deck cause routing, frozen terrain/platform contact fields, exact rounded top sweeps, surface friction, a 48-record impact queue, seeded bounded FX, pose-fitting camera policy, and detached ragdoll debug proxies are integrated. Thirty scripted crashes stay finite and settle; exact repeat and fixed-step partition tests pass; Reduced Motion produces/projects or freezes a static pose with fixed zoom/view height and zero slow motion, hitstop, flash, roll, shake, kick, secondary impact FX, or impact vibration. The complete v1.8 local gate passes 108/108 system subtests, all 16 build-refreshed Gold Runs retain their v1.7 authoritative outcomes, three crash-browser profiles pass against an unfrozen crashed session plus frozen-review/retry assertions, and four final desktop/debug/mobile/Reduced Motion captures pass full-resolution inspection. The hosted PR gate, physical-browser cause/retry matrix, and production smoke remain open and are not claimed complete.
 
 ### U06 / v1.8 — Fast Failure, Great Finish
 
@@ -425,16 +425,16 @@ Statuses describe acceptance evidence, not how much code was written. A feature 
 
 ## Immediate execution queue
 
-After the v1.7 Vector Weave candidate reaches a stable final diff:
+For the current v1.8 Crash Theater candidate:
 
-1. Run and record the complete asset / deterministic-system / 16-route / compatible-Gold / two-browser-profile gate, filling in exact counts only from the final command output. Promote only after review, then verify the production cache, install/offline path, and visible `v1.7.0` label.
-2. Repeat performance and interruption smoke on a deliberately low-end physical phone plus representative iOS/Android, keyboard, multitouch, and real-gamepad paths. Keep these results separate from the named local headless-Chrome measurements.
-3. Finish U02 with physical keyboard/touch/gamepad restart and results-flow parity, explicit reset ownership for remaining presentation subsystems, and additional renderer/audio/persistence extraction.
-4. Human-check the integrated Kinetic Loom recovery line on keyboard and touch, then continue U04 with broader moving terrain and rotated/closed solid chains while keeping their reset/proof contract explicit.
-5. Continue U10 only after that contract with broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
-6. Finish U05/U07 presentation acceptance with original rider-part polish, physical-browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
-7. Record human keyboard/touch references for all 16 courses, derive star targets from those rides, and document safe, stunt, apex, and recovery routes without relabeling automation tapes.
-8. Build PB Echoes and challenge links on the campaign-proven tape format, keeping version mismatch and storage pruning explicit.
+1. **Complete locally:** four inspected v1.8 captures preserve desktop hero, exact collision proxies, 390 × 844 DPR 2 mobile framing, and the static Reduced Motion pose without overwriting v1.7.
+2. **Complete locally:** the final-worktree 3-asset / 108-system / 16-route / 32-Gold / 2 ordinary-browser / 3 crash-browser gate passes with separately recorded v1.8 measurements.
+3. Push the candidate, open a draft PR, record its SHA/URL/hosted Actions result, and confirm publishing is skipped. Promote only after review; then verify visible `v1.8.0`, production cache replacement, installability, and offline relaunch.
+4. Exercise all ten crash causes plus retry on physical keyboard, representative multitouch, and real gamepad paths, including a deliberately low-end Android device and iOS Safari when available.
+5. Finish U02 with physical keyboard/touch/gamepad results-flow parity, explicit reset ownership for remaining presentation subsystems, and additional renderer/audio/persistence extraction.
+6. Human-check Vector Weave on keyboard and touch, then continue U04 with broader moving terrain and rotated/closed solid chains while keeping their reset/proof contract explicit.
+7. Continue U10 only after that contract with broader moving geometry, dedicated framing, and separately classified human safe/apex proof tapes.
+8. Finish U07 with wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget; record human route references and build PB Echoes only on the campaign-proven tape format.
 
 ## Update discipline
 

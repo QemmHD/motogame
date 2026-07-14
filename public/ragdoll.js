@@ -22,6 +22,8 @@ export const RAGDOLL_DEFAULTS = Object.freeze({
   settleFrames: 72,
   minSettleTime: 0.8,
   maxLife: 12,
+  impactThreshold: 150,
+  maxImpactEvents: 48,
 });
 
 const NODE_BLUEPRINTS = Object.freeze([
@@ -35,8 +37,12 @@ const NODE_BLUEPRINTS = Object.freeze([
   ['torso', 9, 1.35, 'rider'],
   ['head', 8, 0.75, 'rider'],
   ['helmet', 12, 0.45, 'rider'],
+  ['rearElbow', 5, 0.24, 'rider'],
+  ['frontElbow', 5, 0.24, 'rider'],
   ['rearHand', 4.5, 0.28, 'rider'],
   ['frontHand', 4.5, 0.28, 'rider'],
+  ['rearKnee', 6, 0.34, 'rider'],
+  ['frontKnee', 6, 0.34, 'rider'],
   ['rearFoot', 5, 0.38, 'rider'],
   ['frontFoot', 5, 0.38, 'rider'],
 ]);
@@ -67,8 +73,8 @@ function mergeConfig(overrides) {
   }
   cfg.fixedDt = clamp(cfg.fixedDt, 1 / 360, 1 / 30);
   cfg.maxFrameDt = clamp(cfg.maxFrameDt, cfg.fixedDt, 0.25);
-  cfg.maxStepsPerCall = Math.max(1, Math.floor(cfg.maxStepsPerCall));
-  cfg.solverIterations = Math.max(1, Math.floor(cfg.solverIterations));
+  cfg.maxStepsPerCall = Math.max(1, Math.min(60, Math.floor(cfg.maxStepsPerCall)));
+  cfg.solverIterations = Math.max(1, Math.min(16, Math.floor(cfg.solverIterations)));
   cfg.gravity = clamp(cfg.gravity, -6000, 6000);
   cfg.damping = clamp(cfg.damping, 0.8, 1);
   cfg.restitution = clamp(cfg.restitution, 0, 0.8);
@@ -77,9 +83,12 @@ function mergeConfig(overrides) {
   cfg.maxDistance = clamp(cfg.maxDistance, 500, 100000);
   cfg.maxContactCorrection = clamp(cfg.maxContactCorrection, 1, 1000);
   cfg.settleSpeed = clamp(cfg.settleSpeed, 0.1, cfg.maxSpeed);
-  cfg.settleFrames = Math.max(1, Math.floor(cfg.settleFrames));
-  cfg.minSettleTime = Math.max(0, cfg.minSettleTime);
-  cfg.maxLife = Math.max(cfg.minSettleTime + cfg.fixedDt, cfg.maxLife);
+  cfg.settleFrames = Math.max(1, Math.min(3600, Math.floor(cfg.settleFrames)));
+  cfg.minSettleTime = clamp(cfg.minSettleTime, 0, 29);
+  cfg.maxLife = clamp(cfg.maxLife, cfg.minSettleTime + cfg.fixedDt, 30);
+  cfg.maxFrameDt = Math.min(cfg.maxFrameDt, cfg.fixedDt * cfg.maxStepsPerCall);
+  cfg.impactThreshold = clamp(cfg.impactThreshold, 0, cfg.maxSpeed);
+  cfg.maxImpactEvents = Math.max(0, Math.min(256, Math.floor(cfg.maxImpactEvents)));
   return Object.freeze(cfg);
 }
 
@@ -128,6 +137,20 @@ function dynamicPose(basis) {
     x: head.x - basis.up.x * 21 - basis.forward.x * 4,
     y: head.y - basis.up.y * 21 - basis.forward.y * 4,
   };
+  const rearHand = {
+    x: handlebar.x - basis.forward.x * 5 + basis.up.x * 1.5,
+    y: handlebar.y - basis.forward.y * 5 + basis.up.y * 1.5,
+  };
+  const frontHand = {
+    x: handlebar.x + basis.forward.x * 5 - basis.up.x * 1.5,
+    y: handlebar.y + basis.forward.y * 5 - basis.up.y * 1.5,
+  };
+  const rearFoot = localPoint(basis, -basis.wheelBase * 0.2, 5);
+  const frontFoot = localPoint(basis, basis.wheelBase * 0.03, 4);
+  const chainMidpoint = (a, b, side) => ({
+    x: (a.x + b.x) * 0.5 + basis.forward.x * side * 3,
+    y: (a.y + b.y) * 0.5 + basis.forward.y * side * 3,
+  });
   return {
     rearWheel: basis.rear,
     frontWheel: basis.front,
@@ -141,16 +164,14 @@ function dynamicPose(basis) {
       x: head.x + basis.up.x * 3 - basis.forward.x * 1.5,
       y: head.y + basis.up.y * 3 - basis.forward.y * 1.5,
     },
-    rearHand: {
-      x: handlebar.x - basis.forward.x * 5 + basis.up.x * 1.5,
-      y: handlebar.y - basis.forward.y * 5 + basis.up.y * 1.5,
-    },
-    frontHand: {
-      x: handlebar.x + basis.forward.x * 5 - basis.up.x * 1.5,
-      y: handlebar.y + basis.forward.y * 5 - basis.up.y * 1.5,
-    },
-    rearFoot: localPoint(basis, -basis.wheelBase * 0.2, 5),
-    frontFoot: localPoint(basis, basis.wheelBase * 0.03, 4),
+    rearElbow: chainMidpoint(torso, rearHand, -1),
+    frontElbow: chainMidpoint(torso, frontHand, 1),
+    rearHand,
+    frontHand,
+    rearKnee: chainMidpoint(hip, rearFoot, -1),
+    frontKnee: chainMidpoint(hip, frontFoot, 1),
+    rearFoot,
+    frontFoot,
   };
 }
 
@@ -168,8 +189,12 @@ function staticPose(basis) {
     torso: p(28, 12),
     head: p(49, 10),
     helmet: p(52, 12),
+    rearElbow: p(34, 7),
+    frontElbow: p(43, 7),
     rearHand: p(38, 3),
     frontHand: p(51, 2),
+    rearKnee: p(-1, 7),
+    frontKnee: p(8, 6),
     rearFoot: p(-7, 4),
     frontFoot: p(5, 1),
   };
@@ -202,6 +227,10 @@ function velocitySeed(snapshot, basis, options) {
     impulseX: finite(options.impulse?.x),
     impulseY: finite(options.impulse?.y),
     impulseSpin: finite(options.impulse?.spin),
+    riderImpulseX: finite(options.riderImpulse?.x),
+    riderImpulseY: finite(options.riderImpulse?.y),
+    bikeImpulseX: finite(options.bikeImpulse?.x),
+    bikeImpulseY: finite(options.bikeImpulse?.y),
   };
 }
 
@@ -214,8 +243,10 @@ function createNodes(pose, basis, seed, cfg, reducedMotion) {
       const rx = position.x - basis.midpoint.x;
       const ry = position.y - basis.midpoint.y;
       const omega = seed.omega + seed.impulseSpin;
-      vx = seed.x + seed.impulseX - omega * ry;
-      vy = seed.y + seed.impulseY + omega * rx;
+      const groupImpulseX = group === 'rider' ? seed.riderImpulseX : seed.bikeImpulseX;
+      const groupImpulseY = group === 'rider' ? seed.riderImpulseY : seed.bikeImpulseY;
+      vx = seed.x + seed.impulseX + groupImpulseX - omega * ry;
+      vy = seed.y + seed.impulseY + groupImpulseY + omega * rx;
       const speed = length(vx, vy);
       if (speed > cfg.maxSpeed) {
         const scale = cfg.maxSpeed / speed;
@@ -272,10 +303,14 @@ function createConstraints(nodes) {
     makeConstraint(byId, 'hip', 'torso', 0.92),
     makeConstraint(byId, 'torso', 'head', 0.9),
     makeConstraint(byId, 'head', 'helmet', 0.78),
-    makeConstraint(byId, 'torso', 'rearHand', 0.86),
-    makeConstraint(byId, 'torso', 'frontHand', 0.86),
-    makeConstraint(byId, 'hip', 'rearFoot', 0.84),
-    makeConstraint(byId, 'hip', 'frontFoot', 0.84),
+    makeConstraint(byId, 'torso', 'rearElbow', 0.88),
+    makeConstraint(byId, 'rearElbow', 'rearHand', 0.88),
+    makeConstraint(byId, 'torso', 'frontElbow', 0.88),
+    makeConstraint(byId, 'frontElbow', 'frontHand', 0.88),
+    makeConstraint(byId, 'hip', 'rearKnee', 0.98),
+    makeConstraint(byId, 'rearKnee', 'rearFoot', 0.98),
+    makeConstraint(byId, 'hip', 'frontKnee', 0.98),
+    makeConstraint(byId, 'frontKnee', 'frontFoot', 0.98),
 
     // Breakable contact points let the rider peel away without random forces.
     makeConstraint(byId, 'hip', 'seat', 0.26, 'tether', 1.65),
@@ -287,11 +322,12 @@ function createConstraints(nodes) {
   return links;
 }
 
-function capVelocity(node, dt, maxSpeed) {
+function capVelocity(node, dt, maxSpeed, metrics = null) {
   let vx = (node.x - node.oldX) / dt;
   let vy = (node.y - node.oldY) / dt;
   const speed = length(vx, vy);
   if (!Number.isFinite(speed)) {
+    if (metrics) metrics.invalidRecoveries++;
     node.x = node.spawnX;
     node.y = node.spawnY;
     node.oldX = node.x;
@@ -299,6 +335,7 @@ function capVelocity(node, dt, maxSpeed) {
     return 0;
   }
   if (speed > maxSpeed) {
+    if (metrics) metrics.velocityClamps++;
     const scale = maxSpeed / speed;
     vx *= scale;
     vy *= scale;
@@ -309,8 +346,9 @@ function capVelocity(node, dt, maxSpeed) {
   return speed;
 }
 
-function keepBounded(node, origin, cfg) {
+function keepBounded(node, origin, cfg, metrics = null) {
   if (![node.x, node.y, node.oldX, node.oldY].every(Number.isFinite)) {
+    if (metrics) metrics.invalidRecoveries++;
     node.x = node.spawnX;
     node.y = node.spawnY;
     node.oldX = node.x;
@@ -321,6 +359,7 @@ function keepBounded(node, origin, cfg) {
   const dy = node.y - origin.y;
   const distance = length(dx, dy);
   if (distance > cfg.maxDistance) {
+    if (metrics) metrics.worldClamps++;
     const scale = cfg.maxDistance / distance;
     node.x = origin.x + dx * scale;
     node.y = origin.y + dy * scale;
@@ -381,6 +420,37 @@ function contactProjection(hit, cfg) {
   };
 }
 
+function safeLabel(value, fallback, maxLength = 48) {
+  let label = fallback;
+  try { if (value != null) label = String(value); } catch {}
+  return label.slice(0, maxLength);
+}
+
+function recordImpact(ragdoll, node, hit, projection, speed) {
+  if (speed < ragdoll.cfg.impactThreshold) return;
+  ragdoll.impactCount++;
+  ragdoll.peakImpact = Math.max(ragdoll.peakImpact, speed);
+  const event = {
+    tick: ragdoll.ticks + 1,
+    node: node.id,
+    group: node.group,
+    x: node.x,
+    y: node.y,
+    nx: projection.nx,
+    ny: projection.ny,
+    speed,
+    strength: clamp((speed - ragdoll.cfg.impactThreshold)
+      / Math.max(1, ragdoll.cfg.maxSpeed - ragdoll.cfg.impactThreshold), 0, 1),
+    surface: safeLabel(hit?.surface, 'terrain'),
+    kind: safeLabel(hit?.kind, 'contact'),
+    id: safeLabel(hit?.id ?? hit?.platformId ?? (Number.isInteger(hit?.segIdx)
+      ? `terrain-${hit.segIdx}` : ''), ''),
+  };
+  ragdoll.lastImpact = event;
+  if (ragdoll.impactEvents.length < ragdoll.cfg.maxImpactEvents) ragdoll.impactEvents.push(event);
+  else ragdoll.droppedImpacts++;
+}
+
 function projectStaticNode(ragdoll, node, contact) {
   const hit = contact(node.x, node.y, node.radius, node, ragdoll);
   const projection = contactProjection(hit, ragdoll.cfg);
@@ -413,7 +483,7 @@ function projectStaticPose(ragdoll, contact) {
     if (!projected) break;
   }
   for (const node of ragdoll.nodes) {
-    keepBounded(node, ragdoll.origin, ragdoll.cfg);
+    keepBounded(node, ragdoll.origin, ragdoll.cfg, ragdoll);
     node.oldX = node.x;
     node.oldY = node.y;
   }
@@ -430,6 +500,7 @@ function resolveContact(ragdoll, node, contact, contactToken) {
   const dt = ragdoll.cfg.fixedDt;
   let vx = (node.x - node.oldX) / dt;
   let vy = (node.y - node.oldY) / dt;
+  const incomingNormalSpeed = Math.max(0, -(vx * nx + vy * ny));
   node.x += nx * penetration;
   node.y += ny * penetration;
 
@@ -451,6 +522,7 @@ function resolveContact(ragdoll, node, contact, contactToken) {
     node.contactToken = contactToken;
     node.contacts++;
     ragdoll.contactCount++;
+    recordImpact(ragdoll, node, hit, projection, incomingNormalSpeed);
     return 2;
   }
   return 1;
@@ -491,8 +563,8 @@ function substep(ragdoll, contact) {
   let speedSquared = 0;
   let maxSpeed = 0;
   for (const node of ragdoll.nodes) {
-    keepBounded(node, ragdoll.origin, cfg);
-    const speed = capVelocity(node, dt, cfg.maxSpeed);
+    keepBounded(node, ragdoll.origin, cfg, ragdoll);
+    const speed = capVelocity(node, dt, cfg.maxSpeed, ragdoll);
     speedSquared += speed * speed;
     maxSpeed = Math.max(maxSpeed, speed);
   }
@@ -526,6 +598,22 @@ export function createRagdoll(bikeSnapshot, options = {}) {
   const seed = velocitySeed(snapshot, basis, options);
   const nodes = createNodes(pose, basis, seed, cfg, reducedMotion);
   const constraints = createConstraints(nodes);
+  const releasedTethers = new Set(Array.isArray(options.releaseTethers) ? options.releaseTethers : []);
+  let initiallyReleased = 0;
+  for (const link of constraints) {
+    if (link.kind !== 'tether' || (!releasedTethers.has('*')
+      && !releasedTethers.has(link.aId) && !releasedTethers.has(link.bId))) continue;
+    link.active = false;
+    initiallyReleased++;
+  }
+  let initialSpeedSquared = 0;
+  let initialPeakSpeed = 0;
+  for (const node of nodes) {
+    const speed = reducedMotion ? 0 : length((node.x - node.oldX) / cfg.fixedDt,
+      (node.y - node.oldY) / cfg.fixedDt);
+    initialSpeedSquared += speed * speed;
+    initialPeakSpeed = Math.max(initialPeakSpeed, speed);
+  }
   const ragdoll = {
     cfg,
     nodes,
@@ -541,12 +629,38 @@ export function createRagdoll(bikeSnapshot, options = {}) {
     reducedMotion,
     quietTicks: 0,
     contactCount: 0,
-    brokenTethers: 0,
-    lastRmsSpeed: reducedMotion ? 0 : length(seed.x + seed.impulseX, seed.y + seed.impulseY),
-    peakSpeed: 0,
+    impactCount: 0,
+    impactEvents: [],
+    droppedImpacts: 0,
+    peakImpact: 0,
+    lastImpact: null,
+    brokenTethers: initiallyReleased,
+    invalidRecoveries: 0,
+    velocityClamps: 0,
+    worldClamps: 0,
+    lastRmsSpeed: Math.sqrt(initialSpeedSquared / nodes.length),
+    peakSpeed: initialPeakSpeed,
   };
   if (reducedMotion && ragdoll.contact) projectStaticPose(ragdoll, ragdoll.contact);
   return ragdoll;
+}
+
+/**
+ * Drains bounded presentation-only contact beats into a detached reusable list.
+ * Impact events never participate in bike, run-session, or replay authority.
+ */
+export function drainRagdollImpacts(ragdoll, target = []) {
+  if (!ragdoll || !Array.isArray(ragdoll.impactEvents)) { target.length = 0; return target; }
+  for (let index = 0; index < ragdoll.impactEvents.length; index++) {
+    const source = ragdoll.impactEvents[index];
+    let event = target[index];
+    if (!event) event = {};
+    Object.assign(event, source);
+    target[index] = event;
+  }
+  target.length = ragdoll.impactEvents.length;
+  ragdoll.impactEvents.length = 0;
+  return target;
 }
 
 /**
@@ -583,26 +697,48 @@ export function readRagdoll(ragdoll, target = {}) {
   target.elapsed = ragdoll.elapsed;
   target.ticks = ragdoll.ticks;
   target.contactCount = ragdoll.contactCount;
+  target.impactCount = ragdoll.impactCount;
+  target.pendingImpacts = ragdoll.impactEvents.length;
+  target.droppedImpacts = ragdoll.droppedImpacts;
+  target.peakImpact = ragdoll.peakImpact;
+  if (ragdoll.lastImpact) {
+    if (!target.lastImpact || typeof target.lastImpact !== 'object') target.lastImpact = {};
+    Object.assign(target.lastImpact, ragdoll.lastImpact);
+  } else target.lastImpact = null;
   target.brokenTethers = ragdoll.brokenTethers;
+  target.invalidRecoveries = ragdoll.invalidRecoveries;
+  target.velocityClamps = ragdoll.velocityClamps;
+  target.worldClamps = ragdoll.worldClamps;
   target.rmsSpeed = ragdoll.lastRmsSpeed;
   target.peakSpeed = ragdoll.peakSpeed;
-  target.nodes = ragdoll.nodes.map((node) => ({
-    id: node.id,
-    group: node.group,
-    x: node.x,
-    y: node.y,
-    radius: node.radius,
-    vx: (node.x - node.oldX) / dt,
-    vy: (node.y - node.oldY) / dt,
-    contacts: node.contacts,
-  }));
-  target.links = ragdoll.constraints.filter((link) => link.active).map((link) => ({
-    a: link.aId,
-    b: link.bId,
-    rest: link.rest,
-    stiffness: link.stiffness,
-    kind: link.kind,
-  }));
+  if (!Array.isArray(target.nodes)) target.nodes = [];
+  target.nodes.length = ragdoll.nodes.length;
+  for (let index = 0; index < ragdoll.nodes.length; index++) {
+    const node = ragdoll.nodes[index];
+    const output = target.nodes[index] || (target.nodes[index] = {});
+    output.id = node.id;
+    output.group = node.group;
+    output.x = node.x;
+    output.y = node.y;
+    output.radius = node.radius;
+    output.vx = (node.x - node.oldX) / dt;
+    output.vy = (node.y - node.oldY) / dt;
+    output.contacts = node.contacts;
+  }
+  if (!Array.isArray(target.links)) target.links = [];
+  let linkCount = 0;
+  for (let index = 0; index < ragdoll.constraints.length; index++) {
+    const link = ragdoll.constraints[index];
+    if (!link.active) continue;
+    const output = target.links[linkCount] || (target.links[linkCount] = {});
+    output.a = link.aId;
+    output.b = link.bId;
+    output.rest = link.rest;
+    output.stiffness = link.stiffness;
+    output.kind = link.kind;
+    linkCount++;
+  }
+  target.links.length = linkCount;
   return target;
 }
 

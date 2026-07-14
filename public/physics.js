@@ -164,7 +164,7 @@ export function createBike(x, y, cfg = CONFIG) {
     // status
     x, y, angle: 0, speed: 0, vx: 0, vy: 0, forwardSpeed: 0,
     grounded: false, rearGround: false, frontGround: false, platformGrounded: false,
-    crashed: false, airborne: false, airGapSteps: 0, airRot: 0,
+    crashed: false, crashContact: null, airborne: false, airGapSteps: 0, airRot: 0,
     lastFlips: 0, flipEventId: 0, wheelSpin: 0,
     landedThisStep: false, landingImpact: 0,
     landingGrade: 'none', landingQuality: 0, landingRetention: 1,
@@ -242,7 +242,20 @@ function resolveWheel(b, T, node, driven, input, dt) {
 
 function headCrash(b, T) {
   const c = terrainContact(T, b.head.x, b.head.y, b.cfg.headR);
-  if (c) { b.crashed = true; return true; }
+  if (c) {
+    const distance = Math.max(0, b.cfg.headR - c.pen);
+    b.crashed = true;
+    b.crashContact = {
+      type: 'terrain',
+      id: `terrain-${c.segIdx}`,
+      segmentIndex: c.segIdx,
+      x: b.head.x - c.nx * distance,
+      y: b.head.y - c.ny * distance,
+      surface: c.surface || 'dirt',
+      surfaceStrength: c.surfaceStrength ?? 1,
+    };
+    return true;
+  }
   return false;
 }
 
@@ -385,6 +398,7 @@ function publishBikeState(bike, frameDt) {
 }
 
 export function stepBike(bike, terrain, input, frameDt) {
+  bike.crashContact = null;
   bike.landedThisStep = false; bike.landingImpact = 0;
   bike.framePrevious = {
     rear: { x: bike.rear.x, y: bike.rear.y },
@@ -394,6 +408,7 @@ export function stepBike(bike, terrain, input, frameDt) {
   const dt = frameDt / bike.cfg.substeps;
   for (let i = 0; i < bike.cfg.substeps; i++) substep(bike, terrain, input, dt);
   publishBikeState(bike, frameDt);
+  return bike.crashContact;
 }
 
 // Resolve the three bike bodies against deterministic one-way moving decks.
@@ -450,7 +465,24 @@ export function resolveBikePlatforms(bike, kinematicRun, frameDt, input = null) 
     const localRear = !!resolveNode(bike.rear, bike.framePrevious.rear, bike.cfg.wheelR, platform, 'rear');
     const localFront = !!resolveNode(bike.front, bike.framePrevious.front, bike.cfg.wheelR, platform, 'front');
     rearHit = localRear || rearHit; frontHit = localFront || frontHit;
-    if (resolveNode(bike.head, bike.framePrevious.head, bike.cfg.headR, platform, 'head')) bike.crashed = true;
+    const headContact = resolveNode(
+      bike.head,
+      bike.framePrevious.head,
+      bike.cfg.headR,
+      platform,
+      'head',
+    );
+    if (headContact) {
+      bike.crashed = true;
+      bike.crashContact = {
+        type: 'platform',
+        id: String(headContact.platformId || platform.id || 'platform'),
+        platformId: String(headContact.platformId || platform.id || 'platform'),
+        x: bike.head.x,
+        y: bike.head.y,
+        surface: headContact.pose?.surface || headContact.surface || 'steel',
+      };
+    }
   }
   bike.platformGrounded = rearHit || frontHit;
   if (rearHit || frontHit) {

@@ -2,6 +2,55 @@
 
 All notable Moto Rush X3 changes are recorded here so development can resume without reconstructing old decisions from source code. Dates use YYYY-MM-DD.
 
+## [1.8.0] — 2026-07-14 — Crash Theater (unmerged release candidate)
+
+This candidate advances U05 with a presentation-only crash overhaul. The complete local release gate and four-image visual record pass; draft PR/hosted Actions, physical-device coverage, and production deployment remain `pending`.
+
+### Added
+
+- The original code-native **Splitline** crash model: 17 simulated parts spanning a detached five-part bike, rider core, segmented elbows/hands, and segmented knees/feet, with Canvas-drawn frame, engine, shrouds, armor, reflective seams, helmet shell, and visor.
+- Ten immutable cause profiles—collision, terrain, platform, saw, spikes, barrel, mace, crusher, TNT, and fallout—with original labels, accents, glyphs, separate rider/bike impulse balance, aliases, and selective tether release.
+- A DOM-free `crash-presentation.js` policy for finite cause normalization, stable crash hashing/noise, bounded pose measurement, dynamic camera fitting, and explicit Reduced Motion invariants.
+- A DOM-free `crash-contact.js` field that clones terrain, freezes current platform rectangles, preserves surface metadata/friction, and continuously sweeps circles against one-way deck lines and rounded endpoints.
+- A bounded ragdoll impact queue with first-contact-per-substep records, threshold/peak/overflow metrics, detached drain output, stable surface/contact identity, and a default 48-record ceiling.
+- Seeded entry debris and contact sparks, throttled material-aware impact audio/haptics, bounded secondary particle output, a cause-colored impact glyph, and a compact crash card with part/unique-touchpoint/peak metrics and retry progress.
+- Detached bounded ragdoll debug proxies for current circles, previous-to-current sweeps, resolved structural/tether links, pose bounds, contact/impact totals, broken tethers, speed/clamp metrics, and last impact.
+- Development-only deterministic crash staging and presentation freezing hooks for repeatable desktop/mobile/debug/Reduced Motion capture.
+- Seven crash-contact tests, six crash-presentation tests, five additional ragdoll tests, one crash-reason detachment test, and two ragdoll-proxy tests, raising deterministic system coverage from 87 to 108 subtests.
+
+### Changed
+
+- Build/package/offline-cache identity advances to `1.8.0`; replay schema remains `1`, authoritative physics remains `physics-4`, course identity remains `course-4`, and the save key remains `motoRushX3.save.v1`.
+- The ragdoll rider grows from 13 to 17 parts by adding rear/front elbows and knees; arm and leg constraints are now two-segment chains while the crash solver stays fixed at `1 / 120` second substeps.
+- Crash entry snapshots its presentation contact world and receives a detached copy of the authoritative crash reason. Ragdoll and browser presentation cannot retain a mutation path into session state.
+- Natural terrain and one-way-platform head strikes now emit their own detached presentation causes instead of falling through to the generic collision card; this metadata remains excluded from `lastCrash` and proof hashes.
+- Dynamic crash framing now follows the bounded complete pose; Reduced Motion keeps constant zoom/view height and removes slow motion, hitstop, flash, roll, shake, kick, animated impact feedback, secondary impact particles/audio, and impact vibration.
+- The service-worker literal precache and asset audit include `crash-contact.js` and `crash-presentation.js`; install metadata now advertises the 17-part Crash Theater rig.
+- Repository Gold tokens were refreshed for required build compatibility only. All 16 v1.7 route outcomes and authoritative state hashes remain identical outside version-bearing tokens.
+
+### Fixed
+
+- Fast, small ragdoll parts can no longer tunnel through a frozen platform top merely because their end position passed below the shallow-overlap window.
+- Rounded deck endpoints now use exact circle/cap geometry instead of expanded-square corner acceptance, while stationary or upward-moving parts under one-way decks remain non-colliding.
+- Ragdoll friction, contact count, and impact emission occur once per physical substep rather than once per solver iteration.
+- Malformed causes, coordinates, pose nodes, contact fields, event labels, and extreme configuration values fail closed or clamp within hard finite limits.
+- Toggling Reduced Motion during a crash neutralizes impact transients and freezes node history instead of leaving camera or velocity residue active.
+
+### Verified locally
+
+- **Asset/offline:** 3/3 subtests pass with both new public modules explicitly precached.
+- **Deterministic systems:** 108/108 subtests pass, including 30 scripted finite/settling crashes and exact repeated/partitioned crash traces.
+- **Physics/routes:** all 16 authored levels complete through the existing stability gate.
+- **Gold Runs:** all 16 `1.8.0` / schema `1` / `physics-4` / `course-4` recovery tapes replay twice in clean browser contexts—32 exact passes with no divergence.
+- **Baseline:** every non-token Gold manifest field is identical to v1.7; current manifest SHA-256 is `FE153EFFD8517A3D69FFD0E7099740FCEDF10F2D7C70ECA3F2C803BE8ED8DA59`.
+- **Ordinary browser profiles:** the final aggregate run collected 360 samples per profile and measured callback-work p95 at 1.00 ms desktop and 0.81 ms mobile DPR 2 against 8/12 ms budgets; the complete interruption/layout matrix passed.
+- **Crash browser profiles:** an unfrozen desktop TNT scene measured 1.60 ms p95 across 181 samples, an unfrozen mobile DPR 2 saw scene measured 1.50 ms across 181 samples, and Reduced Motion crusher retained pose tick `0`; all three then held the frozen review state for 112 tick-equivalent intervals and retried cleanly.
+- **Visual QA:** four real Canvas captures were generated twice, matched with zero pixel differences in the recorded run, and were inspected at full resolution for desktop composition, exact proxies, mobile framing, and Reduced Motion behavior.
+
+### Pending before promotion
+
+- Draft PR, hosted Actions confirmation, physical keyboard/touch/gamepad and crash-cause matrix, low-end-device profiling, review, eligible merge, and production Pages/cache/install/offline smoke.
+
 ## [1.7.0] — 2026-07-13 — Vector Weave (release candidate)
 
 This candidate advances U04 Collision Keystone with an original player-facing force-field mechanic. It is tested and screenshot-backed locally, but is not production-live until the branch is reviewed, promoted through an eligible merge, published, and smoke-tested at the canonical Pages URL.

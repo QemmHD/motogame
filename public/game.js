@@ -1,13 +1,16 @@
 // game.js — Moto Rush X3 client. Canvas 2D, fixed-timestep sim, no framework.
 import { STR } from './strings.js';
 import { buildLevels, COURSE_VERSION } from './levels.js';
-import { normAngle, CONFIG, PHYSICS_VERSION, terrainContact } from './physics.js';
+import { normAngle, CONFIG, PHYSICS_VERSION } from './physics.js';
 import { REPLAY_INPUT, createReplayPlayback, createReplayRecorder, decodeReplay, encodeReplay,
   hashReplayState } from './replay.js';
 import { sampleKinematicPlatform } from './kinematics.js';
-import { createRagdoll, readRagdoll, stepRagdoll } from './ragdoll.js';
+import { createRagdoll, drainRagdollImpacts, readRagdoll, stepRagdoll } from './ragdoll.js';
+import { createCrashContactField, queryCrashContact } from './crash-contact.js';
+import { buildCrashCameraPolicy, crashNoise, crashSignedNoise, hashCrashSeed,
+  normalizeCrashCause } from './crash-presentation.js';
 import { buildDebugProxySnapshot } from './debug-proxies.js';
-import { initializeRunSession, snapshotRunSession,
+import { RUN_SESSION_CRASH_DURATION, initializeRunSession, snapshotRunSession,
   stepCrashedRun, stepPlayingRun } from './run-session.js';
 import { createEffectPool } from './effect-pool.js';
 import { createInputState } from './input-state.js';
@@ -27,7 +30,7 @@ const ASSETS = {
 // Wheel-less bike+rider sprite: axle-anchor pixels (in the sprite's own image
 // space) that the renderer pins onto the physics axles. Read off the art.
 const BODY = { Sr: { x: 120, y: 440 }, Sf: { x: 573, y: 372 }, wheelR: CONFIG.wheelR, sag: 0.22, dip: 18 };
-const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.7-dev';
+const BUILD_VERSION = globalThis.MOTO_RUSH_BUILD?.version || '1.8-dev';
 const BUILD = globalThis.MOTO_RUSH_BUILD?.label || `v${BUILD_VERSION}`;
 const IMG = {};
 const GOLDEN_TAPES = new Map();
@@ -117,6 +120,7 @@ const ENGINE_BANDS = Object.freeze([0, 180, 360, 560, 780, 1020]);
 const Audio2 = (() => {
   let ac = null, master = null, engine = null, engGain = null, engFilt = null;
   let musicBus = null, menuEl = null, driveEl = null, menuGain = null, driveGain = null, musicReady = false;
+  let noiseBuffer = null;
   let muted = save.muted || false, musicKind = 'menu', lastGear = 1;
   function loadMusic() {
     try {
@@ -127,6 +131,15 @@ const Audio2 = (() => {
   function ensure() {
     if (ac) return;
     try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+    const noiseSamples = Math.ceil(ac.sampleRate * 0.6);
+    noiseBuffer = ac.createBuffer(1, noiseSamples, ac.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    let noiseSeed = 0x6d2b79f5;
+    for (let index = 0; index < noiseSamples; index++) {
+      noiseSeed = Math.imul(noiseSeed ^ (noiseSeed >>> 15), 1 | noiseSeed);
+      noiseSeed ^= noiseSeed + Math.imul(noiseSeed ^ (noiseSeed >>> 7), 61 | noiseSeed);
+      noiseData[index] = (((noiseSeed ^ (noiseSeed >>> 14)) >>> 0) / 0x100000000) * 2 - 1;
+    }
     master = ac.createGain(); master.gain.value = muted ? 0 : 0.9; master.connect(ac.destination);
     engine = ac.createOscillator(); engine.type = 'sawtooth'; engine.frequency.value = 60;
     const sub = ac.createOscillator(); sub.type = 'square'; sub.frequency.value = 30;
@@ -184,18 +197,25 @@ const Audio2 = (() => {
     o.connect(g); g.connect(master); o.start(); o.stop(ac.currentTime + dur);
   }
   function noise(dur, vol = 0.4, filt = 900) {
-    if (!ac || muted) return;
-    const n = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-    const src = ac.createBufferSource(); src.buffer = buf;
+    if (!ac || muted || !noiseBuffer) return;
+    const duration = Math.max(0.02, Math.min(0.6, dur));
+    const src = ac.createBufferSource(); src.buffer = noiseBuffer;
     const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filt;
-    const g = ac.createGain(); g.gain.value = sfxVol(vol);
-    src.connect(f); f.connect(g); g.connect(master); src.start();
+    const g = ac.createGain(); g.gain.setValueAtTime(sfxVol(vol), ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+    src.connect(f); f.connect(g); g.connect(master); src.start(); src.stop(ac.currentTime + duration);
   }
   return {
     resume, setEngine, stopEngine, setMusicState, loadMusic, applyMusicGains,
     land(v) { noise(0.14, Math.min(0.5, 0.15 + v / 900), 500); blip(90, 0.12, 'sine', 0.25, 60); },
     crash() { noise(0.5, 0.6, 1400); blip(180, 0.5, 'sawtooth', 0.4, 40); duck(); },
+    impact(speed, surface) {
+      const metal = surface === 'metal' || surface === 'grated';
+      const amount = Math.max(0, Math.min(1, (Number(speed) || 0) / 900));
+      blip(metal ? 290 + amount * 210 : 105 + amount * 90,
+        0.055 + amount * 0.07, metal ? 'square' : 'triangle', 0.08 + amount * 0.13,
+        metal ? 170 : 65);
+    },
     flip() { blip(520, 0.16, 'square', 0.22, 900); },
     stunt() { blip(680, 0.12, 'triangle', 0.2, 1100); },
     checkpoint() { blip(600, 0.1, 'triangle', 0.28); setTimeout(() => blip(900, 0.14, 'triangle', 0.28), 90); },
@@ -370,6 +390,9 @@ const G = {
   riderLean: 0, leanCmd: 0,
   engineGear: 1,
   ragdoll: null, ragdollPose: null,
+  crashWorld: null, crashReason: null, crashProfile: null, crashImpacts: [],
+  crashImpactVisuals: 0, crashLastAudioAge: -10, crashCamera: null,
+  crashSeed: 0,
   replayMode: false, replayPlayback: null, replayRecorder: null, replayToken: null,
   replaySource: null,
   replayTick: 0, replayVerified: false, replayRecorded: false, replayFailed: null,
@@ -377,6 +400,7 @@ const G = {
   replayNotice: null,
   devWaitTicks: 0, devCrashCount: 0,
   debugProxy: null,
+  captureFrozen: false,
 };
 
 function replayMetadata(i) {
@@ -405,6 +429,9 @@ function startLevel(i, { replayToken = null, replaySource = null } = {}) {
   initializeRunSession(G, L, i);
   particlePool.clear(); popupPool.clear(); G.shake = 0; G.cpFlash = 0;
   G.ragdoll = null; G.ragdollPose = null;
+  G.crashWorld = null; G.crashReason = null; G.crashProfile = null;
+  G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashLastAudioAge = -10;
+  G.crashCamera = null; G.crashSeed = 0; G.captureFrozen = false;
   G.slow = 1; G.hitstop = 0; G.flash = 0;
   trackPool.clear(); G.trackT = 0;
   G.riderLean = 0; G.leanCmd = 0; G.engineGear = 1; G.debugProxy = null;
@@ -415,6 +442,7 @@ function startLevel(i, { replayToken = null, replaySource = null } = {}) {
   G.restartQueued = false; G.replayUnavailable = null;
   G.devWaitTicks = 0; G.devCrashCount = 0;
   G.cam.x = G.bike.x; G.cam.y = G.bike.y - 40; G.cam.viewH = 460; G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
+  clearControls('level-start');
   Audio2.setMusicState('drive');
   return true;
 }
@@ -424,6 +452,8 @@ function restartLevel() {
 }
 function finishRespawnPresentation() {
   G.ragdoll = null; G.ragdollPose = null;
+  G.crashWorld = null; G.crashReason = null; G.crashProfile = null;
+  G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashCamera = null; G.crashSeed = 0;
   particlePool.clear(); popupPool.clear(); G.shake = 0; G.hitstop = 0; G.flash = 0; G.slow = 1;
   G.cam.kickX = 0; G.cam.kickY = 0; G.restartQueued = false;
   if (devAutoplay) {
@@ -431,6 +461,7 @@ function finishRespawnPresentation() {
     G.devWaitTicks = 12 + (G.devCrashCount % 7) * 11;
   }
   G.riderLean = 0; G.leanCmd = 0;
+  clearControls('respawn');
   Audio2.setMusicState('drive');
 }
 function togglePause() {
@@ -569,37 +600,98 @@ function simulate(dt) {
   } else if (G.state === 'crashed') {
     const events = stepCrashedRun(G, { restart }, dt);
     if (events.respawn) { finishRespawnPresentation(); return; }
-    if (G.ragdoll) { stepRagdoll(G.ragdoll, dt); G.ragdollPose = readRagdoll(G.ragdoll, G.ragdollPose || {}); }
+    if (G.ragdoll) {
+      stepRagdoll(G.ragdoll, dt);
+      drainRagdollImpacts(G.ragdoll, G.crashImpacts);
+      G.ragdollPose = readRagdoll(G.ragdoll, G.ragdollPose || {});
+      presentRagdollImpacts(G.crashImpacts);
+    }
   }
 }
 
-function crashContact(x, y, radius) {
-  let best = terrainContact(G.terrain, x, y, radius);
-  for (const platform of G.kinematics?.platforms || []) {
-    const p = platform.current;
-    if (x + radius < p.left || x - radius > p.right || y > p.top + radius * 2.5) continue;
-    const pen = y + radius - p.top;
-    if (pen > 0 && pen < radius * 3 && (!best || pen > best.pen)) best = { pen, nx: 0, ny: -1, surface: p.surface };
+function deterministicCrashBurst(x, y, count, lane = 'entry') {
+  const total = Math.max(0, Math.min(28, Math.trunc(count)));
+  for (let index = 0; index < total; index++) {
+    const seed = hashCrashSeed(G.crashSeed, lane, index);
+    const angle = Math.PI * (1.04 + crashNoise(seed, 0) * 0.92);
+    const speed = 90 + crashNoise(seed, 1) * 210;
+    const fire = index % 3 !== 0;
+    const life = 0.2 + crashNoise(seed, 2) * 0.34;
+    spawnParticle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed,
+      life, life, 2 + crashNoise(seed, 3) * 4, fire ? 'fire' : 'dust');
   }
-  return best;
+}
+
+function presentRagdollImpacts(impacts) {
+  if (reduced() || !impacts?.length) return;
+  const count = Math.min(4, impacts.length);
+  for (let index = 0; index < count && G.crashImpactVisuals < 28; index++) {
+    const impact = impacts[index];
+    const strength = Math.max(0, Math.min(1, impact.strength || 0));
+    const seed = hashCrashSeed(G.crashSeed, impact.tick, impact.node, index);
+    const particleCount = strength > 0.45 ? 3 : 2;
+    for (let spark = 0; spark < particleCount && G.crashImpactVisuals < 28; spark++) {
+      const tangentX = -impact.ny, tangentY = impact.nx;
+      const tangent = crashSignedNoise(seed, spark) * (75 + strength * 135);
+      const normal = 45 + crashNoise(seed, spark + 7) * (75 + strength * 150);
+      const life = 0.16 + crashNoise(seed, spark + 13) * 0.22;
+      spawnParticle(impact.x, impact.y,
+        tangentX * tangent + impact.nx * normal,
+        tangentY * tangent + impact.ny * normal,
+        life, life, 1.8 + strength * 3.2, impact.surface === 'dirt' ? 'dust' : 'fire');
+      G.crashImpactVisuals++;
+    }
+    if (impact.speed > 260 && G.crashAge - G.crashLastAudioAge >= 0.16) {
+      G.crashLastAudioAge = G.crashAge;
+      Audio2.impact(impact.speed, impact.surface);
+      shakeAdd(2 + strength * 5); camKick(impact.nx * 3, impact.ny * 3);
+      if (impact.speed > 520) vib(18);
+    }
+  }
 }
 
 function doCrash(reason = null) {
   if (G.state !== 'playing' && G.state !== 'crashed') return;
+  if (G.ragdoll) return;
   if (G.state === 'playing') {
-    G.state = 'crashed'; G.crashTimer = 1.85; G.crashAge = 0; G.combo = 1; G.comboTimer = 0;
+    G.state = 'crashed'; G.crashTimer = RUN_SESSION_CRASH_DURATION;
+    G.crashAge = 0; G.combo = 1; G.comboTimer = 0;
   }
-  const sourceX = reason?.x ?? G.bike.head.x, sourceY = reason?.y ?? G.bike.head.y;
+  const profile = normalizeCrashCause(reason);
+  const sourceX = profile.x ?? G.bike.head.x, sourceY = profile.y ?? G.bike.head.y;
   const dx = G.bike.x - sourceX, dy = G.bike.y - sourceY, d = Math.max(1, Math.hypot(dx, dy));
-  G.ragdoll = createRagdoll(G.bike, { sampleDt: G.bike._dt, contact: crashContact,
-    reducedMotion: reduced(), impulse: { x: dx / d * 120, y: dy / d * 80 - 85,
-      spin: reason?.type === 'tnt' ? 0.9 : 0.35 } });
+  G.crashProfile = profile;
+  G.crashReason = Object.freeze({ type: profile.type, label: profile.label,
+    x: sourceX, y: sourceY, id: String(reason?.id || reason?.platformId || '').slice(0, 64) });
+  G.crashSeed = hashCrashSeed(BUILD_VERSION, G.levelIdx, G.run?.tick || 0,
+    profile.type, sourceX, sourceY);
+  G.crashWorld = createCrashContactField(G.terrain, G.kinematics);
+  const contactField = G.crashWorld;
+  const contact = (x, y, radius, node) => queryCrashContact(contactField, x, y, radius, node);
+  G.ragdoll = createRagdoll(G.bike, { sampleDt: G.bike._dt, contact,
+    reducedMotion: reduced(), impulse: { spin: profile.riderImpulse.spin },
+    riderImpulse: { x: dx / d * profile.riderImpulse.radial,
+      y: dy / d * profile.riderImpulse.radial - profile.riderImpulse.lift },
+    bikeImpulse: { x: dx / d * profile.bikeImpulse.radial,
+      y: dy / d * profile.bikeImpulse.radial - profile.bikeImpulse.lift },
+    releaseTethers: profile.releaseTethers });
   G.ragdollPose = readRagdoll(G.ragdoll, {});
-  if (!reduced()) { G.hitstop = 0.07; G.flash = 0.7; }
-  shakeAdd(16); Audio2.stopEngine(); Audio2.crash(); vib(120);
+  G.crashImpacts.length = 0; G.crashImpactVisuals = 0; G.crashLastAudioAge = -10;
+  G.crashCamera = Object.freeze({ x: G.cam.x, y: G.cam.y, viewH: G.cam.viewH });
+  popupPool.clear(); G.cpFlash = 0; clearControls('crash');
+  const policy = buildCrashCameraPolicy({ pose: G.ragdollPose, cause: profile,
+    age: 0, seed: G.crashSeed, viewport: { width: cssW, height: cssH },
+    reducedMotion: reduced(), baseViewHeight: G.crashCamera.viewH,
+    fallbackX: G.bike.x, fallbackY: G.bike.y });
+  G.hitstop = policy.hitstop; G.flash = policy.flash; G.slow = policy.slow;
+  G.shake = policy.shake; G.cam.kickX = policy.kickX; G.cam.kickY = policy.kickY;
+  G.cam.roll = policy.roll;
+  if (reduced()) {
+    G.cam.x = policy.x; G.cam.y = policy.y; G.cam.viewH = policy.viewH;
+  }
+  Audio2.stopEngine(); Audio2.crash(); vib(reduced() ? 50 : 120);
   if (!reduced()) {
-    if (reason?.type === 'tnt') explosion(G.bike.head.x, G.bike.head.y);
-    else crashSparks(G.bike.head.x, G.bike.head.y);
+    deterministicCrashBurst(G.bike.head.x, G.bike.head.y, profile.type === 'tnt' ? 24 : 15);
   }
 }
 function finishLevel() {
@@ -722,6 +814,24 @@ function updateParticles(dt) {
 // ---------------------------------------------------------------- camera ----
 function updateCamera(dt) {
   const b = G.bike;
+  if (G.state === 'crashed' && G.ragdollPose) {
+    const policy = buildCrashCameraPolicy({ pose: G.ragdollPose, cause: G.crashProfile,
+      age: G.crashAge, seed: G.crashSeed, viewport: { width: cssW, height: cssH },
+      reducedMotion: reduced(), baseViewHeight: G.crashCamera?.viewH || 460,
+      fallbackX: b.x, fallbackY: b.y });
+    if (reduced()) {
+      G.cam.x = policy.x; G.cam.y = policy.y; G.cam.viewH = policy.viewH;
+      G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
+      G.shake = 0; G.hitstop = 0; G.flash = 0; G.slow = 1;
+    } else {
+      const k = 1 - Math.pow(0.001, dt);
+      G.cam.x += (policy.x - G.cam.x) * k;
+      G.cam.y += (policy.y - G.cam.y) * k;
+      G.cam.viewH += (policy.viewH - G.cam.viewH) * (1 - Math.pow(0.02, dt));
+      G.cam.roll = policy.roll;
+    }
+    return;
+  }
   const focusNodes = G.state === 'crashed' ? G.ragdollPose?.nodes : null;
   let focusX = b.x, focusY = b.y, vx = b.vx, vy = b.vy;
   if (focusNodes?.length) {
@@ -772,8 +882,14 @@ function patScale(pat, img) { const s = TILE_WORLD / img.width; const m = new DO
 
 function worldTransform() {
   const scale = cssH / G.cam.viewH;
-  const sx = (G.shake > 0) ? (Math.random() - .5) * G.shake : 0;
-  const sy = (G.shake > 0) ? (Math.random() - .5) * G.shake : 0;
+  const crashShake = G.state === 'crashed' && G.shake > 0;
+  const shakePhase = (G.ragdollPose?.ticks || 0) * 2 + Math.floor(G.crashAge * 120);
+  const sx = (G.shake > 0) ? (crashShake
+    ? crashSignedNoise(G.crashSeed, `shake-x-${shakePhase}`) * G.shake * 0.5
+    : (Math.random() - .5) * G.shake) : 0;
+  const sy = (G.shake > 0) ? (crashShake
+    ? crashSignedNoise(G.crashSeed, `shake-y-${shakePhase}`) * G.shake * 0.5
+    : (Math.random() - .5) * G.shake) : 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.translate(cssW / 2 + sx + G.cam.kickX, cssH * 0.6 + sy + G.cam.kickY);
   if (G.cam.roll) ctx.rotate(G.cam.roll);
@@ -957,16 +1073,6 @@ function drawForceZones() {
   }
 }
 
-function crashSparks(x, y) {
-  dustBurst(x, y, 5);
-  dirtClods(x, y, 7);
-  for (let i = 0; i < 12; i++) {
-    const a = Math.PI * (1.08 + Math.random() * 0.84), sp = 90 + Math.random() * 190;
-    spawnParticle(x, y, Math.cos(a) * sp, Math.sin(a) * sp,
-      0.18 + Math.random() * 0.28, 0.46, 2 + Math.random() * 4, 'fire');
-  }
-}
-
 function drawFlag(im, x, groundY, h, glow) {
   if (!im) return;
   const w = h * im.width / im.height;
@@ -1077,6 +1183,7 @@ function drawCollisionDebug() {
   const p = buildDebugProxySnapshot({
     terrain: G.terrain, run: G.run, kinematicRun: G.kinematics,
     forceZones: G.forceZones, bike: G.bike, level: G.level,
+    ragdollPose: G.ragdollPose,
   });
   G.debugProxy = p;
   const circle = (item, color, width = 2) => {
@@ -1097,6 +1204,29 @@ function drawCollisionDebug() {
   }
   ctx.setLineDash(DASH_NONE);
   for (const item of p.bike.circles) circle(item.current, item.kind === 'head' ? '#ff4f8b' : '#5be7ff', 3);
+  if (p.ragdoll.circles.length) {
+    ctx.setLineDash(DASH_SWEEP);
+    for (const sweep of p.ragdoll.sweeps) {
+      ctx.strokeStyle = sweep.group === 'rider' ? '#ff77ab' : '#68edff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(sweep.x0, sweep.y0); ctx.lineTo(sweep.x1, sweep.y1); ctx.stroke();
+    }
+    ctx.setLineDash(DASH_NONE);
+    for (const link of p.ragdoll.links) {
+      if (!link.resolved) continue;
+      ctx.strokeStyle = link.kind === 'tether' ? '#ffd65c' : 'rgba(218,235,245,0.74)';
+      ctx.lineWidth = link.kind === 'tether' ? 1.5 : 1; ctx.beginPath();
+      ctx.moveTo(link.aPoint.x, link.aPoint.y); ctx.lineTo(link.bPoint.x, link.bPoint.y); ctx.stroke();
+    }
+    for (const item of p.ragdoll.circles) {
+      circle(item.current, item.group === 'rider' ? '#ff77ab' : '#68edff', item.contacts ? 3 : 2);
+    }
+    if (!p.ragdoll.bounds.empty) {
+      const bounds = p.ragdoll.bounds;
+      ctx.strokeStyle = 'rgba(255,214,92,0.85)'; ctx.lineWidth = 2; ctx.setLineDash(DASH_PROXY);
+      ctx.strokeRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+      ctx.setLineDash(DASH_NONE);
+    }
+  }
   for (const hazard of p.hazards) {
     ctx.strokeStyle = hazard.active ? '#ff9f43' : '#79818b'; ctx.lineWidth = 2; ctx.setLineDash(DASH_PROXY);
     ctx.beginPath(); ctx.moveTo(hazard.sweep.x0, hazard.sweep.y0); ctx.lineTo(hazard.sweep.x1, hazard.sweep.y1); ctx.stroke();
@@ -1230,6 +1360,48 @@ function drawRagdollLink(links, stamp, a, b, color, width, requireActive = false
   ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
   ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
 }
+function drawCrashCapsule(stamp, aId, bId, width, fill, outline = '#111720') {
+  if (ragdollNodeStamp[aId] !== stamp || ragdollNodeStamp[bId] !== stamp) return;
+  const a = ragdollNodeLookup[aId], b = ragdollNodeLookup[bId];
+  ctx.strokeStyle = outline; ctx.lineWidth = width + 5; ctx.beginPath();
+  ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  ctx.strokeStyle = fill; ctx.lineWidth = width; ctx.stroke();
+}
+function drawCrashJoint(stamp, id, radius, fill, outline = '#111720', lineWidth = 3) {
+  if (ragdollNodeStamp[id] !== stamp) return;
+  const node = ragdollNodeLookup[id];
+  ctx.fillStyle = fill; ctx.strokeStyle = outline; ctx.lineWidth = lineWidth;
+  ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+}
+function drawCrashPolygon(points, fill, outline = '#111720', lineWidth = 3) {
+  if (!points.length) return;
+  ctx.fillStyle = fill; ctx.strokeStyle = outline; ctx.lineWidth = lineWidth;
+  ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index++) ctx.lineTo(points[index].x, points[index].y);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+function perpendicularPoints(a, b, halfA, halfB = halfA) {
+  const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy));
+  const px = -dy / length, py = dx / length;
+  return [
+    { x: a.x + px * halfA, y: a.y + py * halfA },
+    { x: b.x + px * halfB, y: b.y + py * halfB },
+    { x: b.x - px * halfB, y: b.y - py * halfB },
+    { x: a.x - px * halfA, y: a.y - py * halfA },
+  ];
+}
+function drawCrashShadow(pose) {
+  let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const node of pose.nodes) {
+    minX = Math.min(minX, node.x - node.radius); maxX = Math.max(maxX, node.x + node.radius);
+    maxY = Math.max(maxY, node.y + node.radius);
+  }
+  const centerX = (minX + maxX) * 0.5, groundY = groundYAt(centerX);
+  if (!Number.isFinite(groundY)) return;
+  const air = Math.max(0, groundY - maxY), spread = Math.min(125, Math.max(42, (maxX - minX) * 0.42 + air * 0.12));
+  ctx.save(); ctx.globalAlpha = Math.max(0.07, 0.28 - air / 1200); ctx.fillStyle = '#120d09';
+  ctx.beginPath(); ctx.ellipse(centerX, groundY - 2, spread, 9 + Math.min(8, air * 0.02), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
 function drawCrashRagdoll() {
   const pose = G.ragdollPose; if (!pose?.nodes?.length) return drawBike();
   const stamp = ++ragdollPoseStamp, links = pose.links || [];
@@ -1238,41 +1410,106 @@ function drawCrashRagdoll() {
   }
   const n = ragdollNodeLookup;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  // Detached bike chassis: layered tubes keep the silhouette readable at speed.
-  drawRagdollLink(links, stamp, 'rearWheel', 'bikeFrame', '#151a20', 11);
-  drawRagdollLink(links, stamp, 'bikeFrame', 'frontWheel', '#151a20', 11);
-  drawRagdollLink(links, stamp, 'rearWheel', 'frontWheel', '#343d47', 7);
-  drawRagdollLink(links, stamp, 'bikeFrame', 'seat', '#ff5a3c', 10);
-  drawRagdollLink(links, stamp, 'bikeFrame', 'handlebar', '#aeb8c3', 6);
-  drawRagdollLink(links, stamp, 'frontWheel', 'handlebar', '#626e79', 5);
-  drawRagdollLink(links, stamp, 'rearWheel', 'bikeFrame', '#ff5a3c', 5);
-  drawRagdollLink(links, stamp, 'bikeFrame', 'frontWheel', '#ff5a3c', 5);
+  drawCrashShadow(pose);
+
+  // Splitline rider: far-side obsidian/cobalt limbs establish readable depth.
+  drawCrashCapsule(stamp, 'torso', 'rearElbow', 9, '#244d82');
+  drawCrashCapsule(stamp, 'rearElbow', 'rearHand', 7, '#172b4a');
+  drawCrashCapsule(stamp, 'hip', 'rearKnee', 12, '#18335c');
+  drawCrashCapsule(stamp, 'rearKnee', 'rearFoot', 9, '#10213d');
+  drawCrashJoint(stamp, 'rearElbow', 5.5, '#152a48');
+  drawCrashJoint(stamp, 'rearKnee', 6.5, '#ffb72e');
+
+  // Detached original trellis bike: swingarm, twin-rail fork, tank and engine.
+  drawCrashCapsule(stamp, 'rearWheel', 'bikeFrame', 8, '#4a5662');
+  drawCrashCapsule(stamp, 'bikeFrame', 'frontWheel', 7, '#ff5a3c');
+  drawCrashCapsule(stamp, 'frontWheel', 'handlebar', 5, '#aeb9c4');
+  drawCrashCapsule(stamp, 'frontWheel', 'handlebar', 2, '#e7edf2', '#aeb9c4');
+  drawCrashCapsule(stamp, 'rearWheel', 'seat', 6, '#343e49');
+  drawCrashCapsule(stamp, 'bikeFrame', 'seat', 8, '#ff5a3c');
+  drawCrashCapsule(stamp, 'bikeFrame', 'handlebar', 5, '#df4633');
+  drawCrashPolygon(perpendicularPoints(n.bikeFrame, n.seat, 10, 8), '#d94333');
+  drawCrashPolygon(perpendicularPoints(n.seat, n.handlebar, 9, 6), '#ff6a49');
+  drawCrashJoint(stamp, 'bikeFrame', 10, '#2a3139');
+  drawCrashJoint(stamp, 'bikeFrame', 5, '#c8d0d8', '#161b22', 2);
+  drawCrashCapsule(stamp, 'seat', 'handlebar', 4, '#272f38');
   drawWheel(n.rearWheel.x, n.rearWheel.y, n.rearWheel.radius, G.bike.wheelSpin - pose.elapsed * 8);
   drawWheel(n.frontWheel.x, n.frontWheel.y, n.frontWheel.radius, G.bike.wheelSpin + pose.elapsed * 9);
 
-  // Segmented original rider model.
-  drawRagdollLink(links, stamp, 'hip', 'torso', '#234f8c', 15);
-  drawRagdollLink(links, stamp, 'torso', 'head', '#234f8c', 12);
-  drawRagdollLink(links, stamp, 'torso', 'rearHand', '#ff6948', 8);
-  drawRagdollLink(links, stamp, 'rearHand', 'handlebar', '#e2a47f', 5, true);
-  drawRagdollLink(links, stamp, 'torso', 'frontHand', '#ff6948', 8);
-  drawRagdollLink(links, stamp, 'frontHand', 'handlebar', '#e2a47f', 5, true);
-  drawRagdollLink(links, stamp, 'hip', 'rearFoot', '#1c2f50', 10);
-  drawRagdollLink(links, stamp, 'hip', 'frontFoot', '#1c2f50', 10);
-  ctx.fillStyle = '#ff6948'; ctx.beginPath(); ctx.arc(n.torso.x, n.torso.y, n.torso.radius + 2, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#17233a'; ctx.beginPath(); ctx.arc(n.hip.x, n.hip.y, n.hip.radius, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#f0b08a'; ctx.beginPath(); ctx.arc(n.head.x, n.head.y, n.head.radius, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ffd23e'; ctx.strokeStyle = '#151a20'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(n.helmet.x, n.helmet.y, n.helmet.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // Near-side armor and articulated joints complete the 17-part rider model.
+  drawCrashCapsule(stamp, 'hip', 'torso', 15, '#0f2038');
+  drawCrashPolygon(perpendicularPoints(n.hip, n.torso, 9, 12), '#ff5a3c');
+  drawCrashCapsule(stamp, 'torso', 'head', 8, '#192a43');
+  drawCrashCapsule(stamp, 'torso', 'frontElbow', 10, '#ff6548');
+  drawCrashCapsule(stamp, 'frontElbow', 'frontHand', 8, '#e94838');
+  drawCrashCapsule(stamp, 'hip', 'frontKnee', 13, '#28528b');
+  drawCrashCapsule(stamp, 'frontKnee', 'frontFoot', 10, '#1d3e70');
+  drawCrashJoint(stamp, 'hip', 7.5, '#12233c');
+  drawCrashJoint(stamp, 'torso', 7.5, '#ff795b');
+  drawCrashJoint(stamp, 'frontElbow', 5.5, '#ffb72e');
+  drawCrashJoint(stamp, 'frontKnee', 6.5, '#ffb72e');
+  // Cyan reflective seams are the rig's night-readable signature.
+  drawRagdollLink(links, stamp, 'hip', 'torso', '#63e6ff', 2);
+  drawRagdollLink(links, stamp, 'torso', 'frontElbow', '#63e6ff', 2);
+  drawRagdollLink(links, stamp, 'hip', 'frontKnee', '#63e6ff', 2);
+
+  drawCrashJoint(stamp, 'rearHand', 5.5, '#202a35');
+  drawCrashJoint(stamp, 'frontHand', 5.5, '#202a35');
+  drawCrashCapsule(stamp, 'rearKnee', 'rearFoot', 7, '#10151b');
+  drawCrashCapsule(stamp, 'frontKnee', 'frontFoot', 8, '#10151b');
+  drawCrashJoint(stamp, 'rearFoot', 6, '#0b1016');
+  drawCrashJoint(stamp, 'frontFoot', 6, '#0b1016');
+
+  // Amber halo helmet, separate face shell and smoke-blue visor.
+  drawCrashJoint(stamp, 'head', n.head.radius, '#efaa82');
+  drawCrashJoint(stamp, 'helmet', n.helmet.radius, '#ffd23e', '#111720', 3.5);
   const hx = n.head.x - n.helmet.x, hy = n.head.y - n.helmet.y, hl = Math.max(1, Math.hypot(hx, hy));
-  ctx.strokeStyle = '#243447'; ctx.lineWidth = 5; ctx.beginPath();
-  ctx.moveTo(n.helmet.x - hy / hl * 4, n.helmet.y + hx / hl * 4);
-  ctx.lineTo(n.helmet.x + hx / hl * 9 - hy / hl * 3, n.helmet.y + hy / hl * 9 + hx / hl * 3); ctx.stroke();
-  ctx.fillStyle = '#202936'; ctx.beginPath(); ctx.arc(n.rearHand.x, n.rearHand.y, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(n.frontHand.x, n.frontHand.y, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#10151b'; ctx.beginPath(); ctx.ellipse(n.rearFoot.x, n.rearFoot.y, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(n.frontFoot.x, n.frontFoot.y, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+  const fx = hx / hl, fy = hy / hl, px = -fy, py = fx;
+  drawCrashPolygon([
+    { x: n.helmet.x + fx * 2 + px * 8, y: n.helmet.y + fy * 2 + py * 8 },
+    { x: n.helmet.x + fx * 12 + px * 4, y: n.helmet.y + fy * 12 + py * 4 },
+    { x: n.helmet.x + fx * 11 - px * 5, y: n.helmet.y + fy * 11 - py * 5 },
+    { x: n.helmet.x + fx * 1 - px * 7, y: n.helmet.y + fy * 1 - py * 7 },
+  ], '#243f58', '#101820', 2);
+  ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.moveTo(n.helmet.x - px * 9, n.helmet.y - py * 9);
+  ctx.lineTo(n.helmet.x - px * 2 - fx * 7, n.helmet.y - py * 2 - fy * 7); ctx.stroke();
+
+  // Only still-active grips remain visible; released tethers never fake contact.
+  drawRagdollLink(links, stamp, 'rearHand', 'handlebar', '#9ca8b3', 2.5, true);
+  drawRagdollLink(links, stamp, 'frontHand', 'handlebar', '#d9e0e6', 2.5, true);
   ctx.restore();
+}
+
+function drawCrashImpactGlyph() {
+  if (reduced() || G.state !== 'crashed' || !G.crashReason || G.crashAge > 0.36) return;
+  const age = Math.max(0, G.crashAge);
+  const alpha = Math.max(0, 1 - age / 0.36);
+  const radius = 22 + age * 95;
+  ctx.save(); ctx.translate(G.crashReason.x, G.crashReason.y);
+  ctx.globalAlpha = alpha; ctx.strokeStyle = G.crashProfile?.accent || '#ff7657';
+  ctx.fillStyle = ctx.strokeStyle; ctx.lineCap = 'round';
+  for (let ray = 0; ray < 6; ray++) {
+    const angle = ray / 6 * Math.PI * 2 + crashSignedNoise(G.crashSeed, `ray-${ray}`) * 0.16;
+    const inner = radius * (0.42 + crashNoise(G.crashSeed, `inner-${ray}`) * 0.12);
+    const outer = radius * (0.86 + crashNoise(G.crashSeed, `outer-${ray}`) * 0.24);
+    ctx.lineWidth = ray % 2 ? 2.5 : 4; ctx.beginPath();
+    ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+    ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer); ctx.stroke();
+  }
+  ctx.font = '900 22px ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(G.crashProfile?.impactGlyph || '#', 0, 1);
+  ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+function drawCrashScene() {
+  const pose = G.ragdollPose;
+  if (!pose) return drawBike();
+  const blend = reduced() ? 1 : Math.max(0.22, Math.min(1, pose.elapsed / 0.08));
+  if (blend < 1) {
+    ctx.save(); ctx.globalAlpha = 1 - blend; drawBike(); ctx.restore();
+  }
+  ctx.save(); ctx.globalAlpha = blend; drawCrashRagdoll(); ctx.restore();
 }
 
 function drawTrackEffect(track) {
@@ -1320,7 +1557,8 @@ function drawWorld(scale) {
   if (G.level.course.finishPt) drawFlag(IMG.finish, G.level.course.finishPt.x, G.level.course.finishPt.y, 150, true);
   drawHazards();
   drawParticles();
-  if (G.state === 'crashed' && G.ragdollPose) drawCrashRagdoll(); else drawBike();
+  drawCrashImpactGlyph();
+  if (G.state === 'crashed' && G.ragdollPose) drawCrashScene(); else drawBike();
   if (collisionDebug) drawCollisionDebug();
   popupPool.forEachActive(drawPopupEffect);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
@@ -1392,7 +1630,8 @@ function drawHUD() {
 }
 
 function drawCollisionLegend() {
-  const p = G.debugProxy, x = 14, y = 116, w = Math.min(284, cssW - 28), h = 130;
+  const p = G.debugProxy, x = 14, y = 116, w = Math.min(310, cssW - 28);
+  const hasRagdoll = p.ragdoll.circles.length > 0, h = hasRagdoll ? 154 : 130;
   ctx.save();
   roundRect(x, y, w, h, 12); ctx.fillStyle = 'rgba(7,13,20,0.90)'; ctx.fill();
   ctx.strokeStyle = 'rgba(85,216,255,0.65)'; ctx.lineWidth = 2; ctx.stroke();
@@ -1402,12 +1641,18 @@ function drawCollisionLegend() {
   ctx.fillText(`TICK ${String(p.tick).padStart(5, '0')}  TERRAIN ${p.terrain.length}`, x + 12, y + 42);
   ctx.fillText(`BIKE 3  HAZARDS ${p.hazards.length}  DECKS ${p.platforms.length}`, x + 12, y + 59);
   ctx.fillText(`LOOMS ${p.forceZones.length}  CHECKPOINTS ${p.checkpoints.length}`, x + 12, y + 76);
-  ctx.fillStyle = '#53ff91'; ctx.fillText('━ TERRAIN', x + 12, y + 97);
-  ctx.fillStyle = '#5be7ff'; ctx.fillText('○ BIKE', x + 97, y + 97);
-  ctx.fillStyle = '#ff5b3d'; ctx.fillText('○ HAZARD', x + 163, y + 97);
-  ctx.fillStyle = '#b46cff'; ctx.fillText('□ PLATFORM', x + 12, y + 116);
-  ctx.fillStyle = '#55d8ff'; ctx.fillText('□ LOOM', x + 119, y + 116);
-  ctx.fillStyle = '#ffe052'; ctx.fillText('┊ GOALS', x + 197, y + 116);
+  if (hasRagdoll) {
+    const impacts = p.ragdoll.contactMetrics;
+    ctx.fillStyle = '#ff77ab';
+    ctx.fillText(`RAG ${p.ragdoll.circles.length}  LINKS ${p.ragdoll.resolvedLinks}  HIT ${Math.round(impacts.peakImpact)}`, x + 12, y + 93);
+  }
+  const legendY = hasRagdoll ? y + 117 : y + 97;
+  ctx.fillStyle = '#53ff91'; ctx.fillText('-- TERRAIN', x + 12, legendY);
+  ctx.fillStyle = '#5be7ff'; ctx.fillText('O BIKE', x + 97, legendY);
+  ctx.fillStyle = '#ff5b3d'; ctx.fillText('O HAZARD', x + 163, legendY);
+  ctx.fillStyle = '#b46cff'; ctx.fillText('[] PLATFORM', x + 12, legendY + 19);
+  ctx.fillStyle = '#55d8ff'; ctx.fillText('[] LOOM', x + 119, legendY + 19);
+  ctx.fillStyle = '#ffe052'; ctx.fillText('| GOALS', x + 197, legendY + 19);
   ctx.restore();
 }
 
@@ -1453,17 +1698,34 @@ function overlayPaused() {
 function overlayCrashed() {
   const reveal = Math.max(0, Math.min(1, (G.crashAge - 0.18) / 0.24));
   if (reveal <= 0) return;
-  ctx.globalAlpha = reveal;
-  ctx.fillStyle = 'rgba(120,20,10,0.22)'; ctx.fillRect(0, 0, cssW, cssH);
-  const titleY = Math.max(118, cssH * 0.27);
-  ctx.fillStyle = '#ff6a4a'; ctx.font = '900 ' + Math.min(48, cssW * 0.085) + 'px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText(STR.crash, cssW / 2, titleY);
+  const profile = G.crashProfile || normalizeCrashCause(null);
+  const pose = G.ragdollPose || {};
+  const width = Math.min(430, cssW - 24);
+  const height = 132;
+  const x = (cssW - width) * 0.5;
+  const y = Math.max(108, Math.min(cssH - height - 88, cssH * 0.2));
+  ctx.save(); ctx.globalAlpha = reveal;
+  ctx.fillStyle = 'rgba(120,20,10,0.17)'; ctx.fillRect(0, 0, cssW, cssH);
+  roundRect(x, y, width, height, 18); ctx.fillStyle = 'rgba(9,13,20,0.88)'; ctx.fill();
+  ctx.strokeStyle = profile.accent; ctx.lineWidth = 2.5; ctx.stroke();
+  roundRect(x + 13, y + 12, 94, 24, 7); ctx.fillStyle = profile.accent; ctx.fill();
+  ctx.fillStyle = '#10151d'; ctx.font = '900 11px ui-monospace, monospace';
+  ctx.textAlign = 'center'; ctx.fillText('CRASH THEATER', x + 60, y + 28);
+  ctx.fillStyle = '#fff'; ctx.font = '900 ' + Math.min(31, width * 0.074) + 'px system-ui';
+  ctx.fillText(`${profile.impactGlyph}  ${profile.label}`, cssW / 2, y + 65);
+  const contacts = pose.nodes?.reduce((count, node) => count + (node.contacts > 0 ? 1 : 0), 0) || 0;
+  const impact = Math.round(Math.max(0, pose.peakImpact || 0));
+  const parts = pose.nodes?.length || 0;
+  ctx.fillStyle = 'rgba(222,235,245,0.72)'; ctx.font = '800 11px ui-monospace, monospace';
+  ctx.fillText(`${parts} PART RIG   ${contacts} TOUCHPOINTS   PEAK ${impact}`, cssW / 2, y + 88);
+  const progress = Math.max(0, Math.min(1, G.crashAge / RUN_SESSION_CRASH_DURATION));
+  roundRect(x + 18, y + 101, width - 36, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
+  roundRect(x + 18, y + 101, (width - 36) * progress, 5, 2.5); ctx.fillStyle = profile.accent; ctx.fill();
   if (G.crashAge > 0.42) {
-    ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.font = '600 17px system-ui';
-    ctx.fillText(STR.tapRetry, cssW / 2, titleY + 34);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '700 15px system-ui';
+    ctx.fillText(STR.tapRetry, cssW / 2, y + 124);
   }
-  ctx.globalAlpha = 1;
-  ctx.textAlign = 'left';
+  ctx.restore(); ctx.textAlign = 'left';
 }
 function overlayFinished() {
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, cssW, cssH);
@@ -1617,7 +1879,21 @@ function doUI(id) {
   if (id === 'set_sfx_dn') { SETTINGS.sfx = clamp01(SETTINGS.sfx - 0.1); persist(); return; }
   if (id === 'set_sfx_up') { SETTINGS.sfx = clamp01(SETTINGS.sfx + 0.1); persist(); return; }
   if (id === 'set_mute') { Audio2.toggle(); return; }
-  if (id === 'set_motion') { SETTINGS.reducedMotion = !SETTINGS.reducedMotion; if (SETTINGS.reducedMotion) G.shake = 0; persist(); return; }
+  if (id === 'set_motion') {
+    SETTINGS.reducedMotion = !SETTINGS.reducedMotion;
+    if (SETTINGS.reducedMotion) {
+      G.shake = 0; G.slow = 1; G.hitstop = 0; G.flash = 0;
+      G.cam.roll = 0; G.cam.kickX = 0; G.cam.kickY = 0;
+      if (G.state === 'crashed' && G.ragdoll) {
+        G.ragdoll.active = false; G.ragdoll.settled = true;
+        G.ragdoll.reducedMotion = true; G.ragdoll.settleReason = 'reduced-motion-toggle';
+        for (const node of G.ragdoll.nodes) { node.oldX = node.x; node.oldY = node.y; }
+        G.ragdollPose = readRagdoll(G.ragdoll, G.ragdollPose || {});
+        updateCamera(0);
+      }
+    }
+    persist(); return;
+  }
   if (id === 'set_haptics') { SETTINGS.haptics = !SETTINGS.haptics; persist(); if (SETTINGS.haptics) vib(20); return; }
   if (id === 'set_left_handed') {
     SETTINGS.leftHanded = !SETTINGS.leftHanded; updateControlLayout(); persist(); return;
@@ -1687,6 +1963,10 @@ function frame(now) {
   const clampedMs = Math.max(0, rawDtMs - 100);
   const dtMs = Math.min(100, rawDtMs);
   let fixedTicks = 0, backlogTicks = Math.floor(acc / STEP_MS), droppedMs = 0;
+  if (G.captureFrozen) {
+    render(); recordFrameTelemetry(rawDtMs, 0, backlogTicks, 0, clampedMs);
+    updateDevPanel(now); return;
+  }
   if (gamepadConnected) inputState.pollGamepads(navigator.getGamepads?.() || []);
   // hitstop: freeze the sim, keep rendering (a punchy impact beat)
   if (G.hitstop > 0) {
@@ -1760,10 +2040,56 @@ function stepDevTicks(count = 1) {
   for (; stepped < ticks; stepped++) {
     if (G.state !== 'playing' && G.state !== 'crashed') break;
     simulate(STEP); updateParticles(STEP);
+    if (G.state === 'playing' || G.state === 'crashed') updateCamera(STEP);
+    if (G.flash > 0) G.flash = Math.max(0, G.flash - STEP * 3.5);
   }
   return { ok: true, stepped, state: G.state, replayTick: G.replayTick,
     runTick: G.run?.tick ?? 0, time: G.elapsed, score: G.score,
     token: G.replayToken || null };
+}
+
+function stageDevCrash(options = {}) {
+  if (!dev) return { ok: false, reason: 'development mode required' };
+  const levelIndex = Math.max(0, Math.min(levels.length - 1,
+    Math.trunc(Number(options.levelIndex ?? options.level ?? 15) || 0)));
+  G.captureFrozen = false;
+  SETTINGS.reducedMotion = options.reducedMotion === true;
+  if (!startLevel(levelIndex)) return { ok: false, reason: 'level start failed' };
+  const warmupTicks = Math.max(0, Math.min(240, Math.trunc(Number(options.warmupTicks ?? 42) || 0)));
+  stepDevTicks(warmupTicks);
+  if (G.state !== 'playing') {
+    startLevel(levelIndex); stepDevTicks(Math.min(12, warmupTicks));
+  }
+  const type = typeof options.type === 'string' ? options.type : 'mace';
+  const sourceX = G.bike.x + (Number.isFinite(options.offsetX) ? options.offsetX : 28);
+  const sourceY = G.bike.y + (Number.isFinite(options.offsetY) ? options.offsetY : -4);
+  doCrash({ type, id: `dev-${type}`, x: sourceX, y: sourceY,
+    intensity: Number.isFinite(options.intensity) ? options.intensity : 1 });
+  const presentationTicks = Math.max(0, Math.min(110,
+    Math.trunc(Number(options.presentationTicks ?? 0) || 0)));
+  if (presentationTicks) {
+    // Fixed capture staging begins after the real-time 75 ms impact beat.
+    G.hitstop = 0; G.slow = 1;
+    stepDevTicks(presentationTicks);
+  }
+  if (options.collisionDebug === true) collisionDebug = true;
+  render();
+  return {
+    ok: G.state === 'crashed', state: G.state, levelIndex: G.levelIdx,
+    type: G.crashProfile?.type, label: G.crashProfile?.label,
+    crashAge: G.crashAge, poseTicks: G.ragdollPose?.ticks,
+    parts: G.ragdollPose?.nodes?.length || 0,
+    contacts: G.ragdollPose?.contactCount || 0,
+    reducedMotion: G.ragdollPose?.reducedMotion === true,
+    camera: { ...G.cam },
+  };
+}
+
+function freezeDevPresentation(frozen = true) {
+  if (!dev) return false;
+  G.captureFrozen = frozen !== false;
+  if (G.captureFrozen) render();
+  return G.captureFrozen;
 }
 
 function runDevToEnd(maxTicks = 60 * 120) {
@@ -1790,6 +2116,9 @@ function effectPoolSnapshot() {
 // test hook (used by the screenshot harness / dev console)
 window.__moto = { G, startLevel, restartLevel, levels, SETTINGS,
   stepTicks: stepDevTicks, runToEnd: runDevToEnd,
+  stageCrash: stageDevCrash, freezePresentation: freezeDevPresentation,
+  renderNow: () => { if (dev) render(); return dev; },
+  setCollisionDebug: value => { if (dev) collisionDebug = value === true; return collisionDebug; },
   input: inputState,
   performanceSnapshot: () => snapshotPerformanceMetrics(performanceMetrics),
   resetPerformance: resetGamePerformance,

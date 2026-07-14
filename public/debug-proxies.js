@@ -12,6 +12,8 @@ const HARD_LIMITS = Object.freeze({
   platforms: 1024,
   forceZones: 2048,
   checkpoints: 1024,
+  ragdollNodes: 2048,
+  ragdollLinks: 8192,
   coordinate: 100000000,
   radius: 1000000,
 });
@@ -22,9 +24,12 @@ export const DEBUG_PROXY_DEFAULTS = Object.freeze({
   maxPlatforms: 256,
   maxForceZones: 512,
   maxCheckpoints: 256,
+  maxRagdollNodes: 64,
+  maxRagdollLinks: 128,
   maxCoordinate: 10000000,
   maxRadius: 100000,
   markerHalfHeight: 150,
+  ragdollSweepDt: 1 / 120,
 });
 
 function clamp(value, low, high) {
@@ -69,10 +74,16 @@ function normalizeOptions(options = {}) {
       DEBUG_PROXY_DEFAULTS.maxForceZones, HARD_LIMITS.forceZones),
     maxCheckpoints: boundedInteger(options.maxCheckpoints,
       DEBUG_PROXY_DEFAULTS.maxCheckpoints, HARD_LIMITS.checkpoints),
+    maxRagdollNodes: boundedInteger(options.maxRagdollNodes,
+      DEBUG_PROXY_DEFAULTS.maxRagdollNodes, HARD_LIMITS.ragdollNodes),
+    maxRagdollLinks: boundedInteger(options.maxRagdollLinks,
+      DEBUG_PROXY_DEFAULTS.maxRagdollLinks, HARD_LIMITS.ragdollLinks),
     maxCoordinate,
     maxRadius,
     markerHalfHeight: clamp(Math.abs(finite(options.markerHalfHeight,
       DEBUG_PROXY_DEFAULTS.markerHalfHeight)), 1, maxCoordinate),
+    ragdollSweepDt: clamp(Math.abs(finite(options.ragdollSweepDt,
+      DEBUG_PROXY_DEFAULTS.ragdollSweepDt)), 1 / 1000, 0.25),
   });
 }
 
@@ -398,6 +409,155 @@ function finishProxy(level, bike, checkpoints, cfg) {
   };
 }
 
+function ragdollPreviousPoint(node, x, y, vx, vy, cfg) {
+  const previous = node?.previous && typeof node.previous === 'object'
+    ? node.previous : null;
+  const rawX = previous?.x ?? node?.oldX ?? node?.ox;
+  const rawY = previous?.y ?? node?.oldY ?? node?.oy;
+  return {
+    x: coordinate(rawX, cfg, x - vx * cfg.ragdollSweepDt),
+    y: coordinate(rawY, cfg, y - vy * cfg.ragdollSweepDt),
+  };
+}
+
+function ragdollImpactProxy(value, cfg) {
+  if (!value || typeof value !== 'object') return null;
+  return {
+    tick: boundedInteger(value.tick, 0, Number.MAX_SAFE_INTEGER),
+    node: safeString(value.node, '', 96),
+    group: safeString(value.group, 'unknown', 48),
+    x: coordinate(value.x, cfg),
+    y: coordinate(value.y, cfg),
+    nx: boundedNumber(value.nx, 0, 1),
+    ny: boundedNumber(value.ny, -1, 1),
+    speed: radius(value.speed, cfg),
+    strength: clamp(finite(value.strength), 0, 1),
+    surface: safeString(value.surface, 'terrain', 48),
+    kind: safeString(value.kind, 'contact', 48),
+    id: safeString(value.id, '', 96),
+  };
+}
+
+function ragdollProxy(pose, cfg) {
+  const sourceNodes = sourceArray(pose?.nodes);
+  const sourceLinks = sourceArray(pose?.links);
+  const nodeCount = Math.min(sourceNodes.length, cfg.maxRagdollNodes);
+  const circles = new Array(nodeCount);
+  const sweeps = new Array(nodeCount);
+  const nodesById = new Map();
+  let touchedNodes = 0;
+  let nodeContactSum = 0;
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+
+  for (let index = 0; index < nodeCount; index++) {
+    const node = sourceNodes[index] || {};
+    const id = safeString(node.id, `ragdoll-node-${index}`);
+    const group = safeString(node.group, 'unknown', 48);
+    const x = coordinate(node.x, cfg);
+    const y = coordinate(node.y, cfg);
+    const r = radius(node.radius ?? node.r, cfg);
+    const vx = coordinate(node.vx, cfg);
+    const vy = coordinate(node.vy, cfg);
+    const previous = ragdollPreviousPoint(node, x, y, vx, vy, cfg);
+    const contacts = boundedInteger(node.contacts, 0, Number.MAX_SAFE_INTEGER);
+    if (contacts > 0) touchedNodes++;
+    nodeContactSum = Math.min(Number.MAX_SAFE_INTEGER, nodeContactSum + contacts);
+    const current = { x, y, r };
+    const circle = {
+      id,
+      index,
+      group,
+      current,
+      previous: { x: previous.x, y: previous.y, r },
+      velocity: { x: vx, y: vy },
+      contacts,
+    };
+    circles[index] = circle;
+    sweeps[index] = {
+      id,
+      group,
+      x0: previous.x,
+      y0: previous.y,
+      x1: x,
+      y1: y,
+      r,
+    };
+    if (!nodesById.has(id)) nodesById.set(id, current);
+    left = Math.min(left, previous.x - r, x - r);
+    right = Math.max(right, previous.x + r, x + r);
+    top = Math.min(top, previous.y - r, y - r);
+    bottom = Math.max(bottom, previous.y + r, y + r);
+  }
+
+  const linkCount = Math.min(sourceLinks.length, cfg.maxRagdollLinks);
+  const links = new Array(linkCount);
+  let resolvedLinks = 0;
+  for (let index = 0; index < linkCount; index++) {
+    const link = sourceLinks[index] || {};
+    const a = safeString(link.a ?? link.aId, '', 96);
+    const b = safeString(link.b ?? link.bId, '', 96);
+    const pointA = nodesById.get(a);
+    const pointB = nodesById.get(b);
+    const resolved = Boolean(pointA && pointB);
+    if (resolved) resolvedLinks++;
+    links[index] = {
+      id: safeString(link.id, `ragdoll-link-${index}`),
+      index,
+      kind: safeString(link.kind, 'structure', 48),
+      a,
+      b,
+      aPoint: pointA ? { x: pointA.x, y: pointA.y } : { x: 0, y: 0 },
+      bPoint: pointB ? { x: pointB.x, y: pointB.y } : { x: 0, y: 0 },
+      rest: radius(link.rest, cfg),
+      stiffness: clamp(finite(link.stiffness), 0, 1),
+      resolved,
+    };
+  }
+
+  return {
+    active: pose?.active === true,
+    settled: pose?.settled === true,
+    reducedMotion: pose?.reducedMotion === true,
+    settleReason: pose?.settleReason == null
+      ? null : safeString(pose.settleReason, '', 48),
+    elapsed: clamp(finite(pose?.elapsed), 0, cfg.maxCoordinate),
+    ticks: boundedInteger(pose?.ticks, 0, Number.MAX_SAFE_INTEGER),
+    circles,
+    sweeps,
+    links,
+    bounds: nodeCount > 0
+      ? { left, right, top, bottom, empty: false }
+      : { left: 0, right: 0, top: 0, bottom: 0, empty: true },
+    contactMetrics: {
+      total: boundedInteger(pose?.contactCount, nodeContactSum, Number.MAX_SAFE_INTEGER),
+      nodeContactSum,
+      touchedNodes,
+      impactCount: boundedInteger(pose?.impactCount, 0, Number.MAX_SAFE_INTEGER),
+      pendingImpacts: boundedInteger(pose?.pendingImpacts, 0, Number.MAX_SAFE_INTEGER),
+      droppedImpacts: boundedInteger(pose?.droppedImpacts, 0, Number.MAX_SAFE_INTEGER),
+      peakImpact: radius(pose?.peakImpact, cfg),
+      brokenTethers: boundedInteger(pose?.brokenTethers, 0, Number.MAX_SAFE_INTEGER),
+      lastImpact: ragdollImpactProxy(pose?.lastImpact, cfg),
+    },
+    motionMetrics: {
+      rmsSpeed: radius(pose?.rmsSpeed, cfg),
+      peakSpeed: radius(pose?.peakSpeed, cfg),
+      invalidRecoveries: boundedInteger(pose?.invalidRecoveries, 0, Number.MAX_SAFE_INTEGER),
+      velocityClamps: boundedInteger(pose?.velocityClamps, 0, Number.MAX_SAFE_INTEGER),
+      worldClamps: boundedInteger(pose?.worldClamps, 0, Number.MAX_SAFE_INTEGER),
+    },
+    resolvedLinks,
+    sourceCounts: { nodes: sourceNodes.length, links: sourceLinks.length },
+    truncated: {
+      nodes: truncateCount(sourceNodes, circles.length),
+      links: truncateCount(sourceLinks, links.length),
+    },
+  };
+}
+
 /**
  * Build a detached collision-debug snapshot from current runtime state.
  * Sources are read only; no contact query or simulation method is invoked.
@@ -410,6 +570,7 @@ export function buildDebugProxySnapshot(source = {}, options = {}) {
   const forceZones = forceZoneProxy(source.forceZones, source.level, cfg);
   const checkpoints = checkpointProxy(source.run, source.level, cfg);
   const bike = bikeProxy(source.bike, cfg);
+  const ragdoll = ragdollProxy(source.ragdollPose, cfg);
   return {
     tick: boundedNumber(source.run?.tick, 0, Number.MAX_SAFE_INTEGER),
     kinematicTick: boundedNumber(source.kinematicRun?.tick, 0, Number.MAX_SAFE_INTEGER),
@@ -428,5 +589,6 @@ export function buildDebugProxySnapshot(source = {}, options = {}) {
     forceZones: forceZones.output,
     checkpoints: checkpoints.output,
     finish: finishProxy(source.level, source.bike, checkpoints.output, cfg),
+    ragdoll,
   };
 }

@@ -1,6 +1,6 @@
 # Performance and Interruption QA
 
-This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** foundation and its v1.7.0 **Vector Weave** regression pass. It separates what the automated browser gate proves from what still requires physical-device testing.
+This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride** foundation, the v1.7.0 **Vector Weave** regression pass, and the v1.8.0 **Crash Theater** candidate. It separates what the automated browser gates prove from what still requires physical-device testing.
 
 ## Acceptance profiles
 
@@ -11,7 +11,30 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 
 The recorded full-gate reference run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
 
-## Latest recorded local reference — v1.7.0
+## Latest recorded local reference — v1.8.0
+
+The final aggregate `npm test` run on 2026-07-14 used Chrome 150.0.7871.102 and passed both ordinary profiles:
+
+| Profile | Work samples | Work mean | Work p50 | Work p95 | Work p99 | Work max | Pacing p95 | Peak effects | Budget | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Desktop 1280 × 720 @1 | 360 | 0.62 ms | 0.55 ms | 1.00 ms | 1.60 ms | 2.80 ms | 7.20 ms | 69/636 | p95 < 8 ms | Pass |
+| Mobile 390 × 844 @2 | 360 | 0.55 ms | 0.50 ms | 0.81 ms | 1.78 ms | 3.00 ms | 7.20 ms | 69/636 | p95 < 12 ms | Pass |
+
+The desktop and mobile profiles advanced 99 and 91 fixed ticks respectively. The mobile profile then passed the complete interruption, rotation, narrow-layout, simultaneous-pointer, and left-hand-control matrix.
+
+### Dedicated Crash Theater profiles — v1.8.0
+
+`npm run test:browser-crash` measures real live Crash Theater scenes separately from the clean ordinary-play route:
+
+| Profile | Parts | Pose ticks | Raw contacts | Frozen review | Work samples | Work p95 | Budget | Retry | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Desktop 1280 × 720 @1, TNT | 17 | 177 | 1,894 | 112 ticks | 181 | 1.60 ms | p95 < 8 ms | Clean | Pass |
+| Mobile 390 × 844 @2, saw | 17 | 168 | 1,287 | 112 ticks | 181 | 1.50 ms | p95 < 12 ms | Clean | Pass |
+| Desktop 1280 × 720 @1, Reduced Motion crusher | 17 | 0 | 0 | 112 ticks | — | not timed | not applicable | Clean | Pass |
+
+The two timed profiles run unfrozen while crashed-session ticks, the retry timer, ragdoll stepping/contact, impact draining, particles, and camera work advance. Every profile also verifies the exact 17-part order, matching Canvas cause/card text, finite pose and camera output, bounded effects, a separately frozen review state, checkpoint retry, and clean post-retry reset. The Reduced Motion case advances the crashed-session timer while proving a static pose invariant instead of reporting a meaningless animation timing percentile.
+
+## Preserved local reference — v1.7.0
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
@@ -61,11 +84,14 @@ Both hosted runs keep synchronous work close to their local references while pac
 11. Runs the interruption and control-layout matrix on the mobile profile, including 390 × 844 and 320 × 568 target separation.
 12. Closes each context, the browser, and the temporary server even if an assertion fails.
 
+The dedicated crash harness starts the same temporary deployment boundary with service workers blocked, then runs desktop TNT, mobile DPR 2 saw, and Reduced Motion crusher profiles. It stages each cause through development-only deterministic hooks after 28 presentation ticks. For measurement only, it raises the harness copy of the crash timer to 35 seconds so a slow runner can collect at least 180 unfrozen callbacks through the real crashed-session/ragdoll/contact/effect/camera path; collection may wait up to 30 seconds and reports the partial count on timeout, while the strict 8/12 ms callback-work budgets do not change. The production `1.85` second retry boundary is unchanged and covered separately. It requires session and dynamic pose progress, validates the 17-part rig and visible card, then freezes and compares an exact review state for 112 tick-equivalent intervals, retries, and rejects page, console, network, HTTP, camera, pose, effect-bound, or reset errors.
+
 Reproduce it from the repository root:
 
 ```powershell
 npm ci
 npm run test:browser-performance
+npm run test:browser-crash
 ```
 
 Run the DOM-free telemetry and pool/input unit gates separately:
@@ -120,6 +146,18 @@ The runtime also clears active commands when the document becomes hidden. The in
 
 ## Visual evidence
 
+| v1.8 live crash sample | v1.8 mobile DPR 2 sample |
+|:---:|:---:|
+| ![Crash Theater desktop hero](../screenshots/v1.8/update-v18-crash-hero.png) | <img src="../screenshots/v1.8/update-v18-mobile-crash.png" alt="Crash Theater at 390 by 844 and DPR 2" width="300"> |
+
+| Exact crash proxies | Reduced Motion invariant |
+|:---:|:---:|
+| ![Ragdoll circles, sweeps, links, and contacts](../screenshots/v1.8/update-v18-ragdoll-proxies.png) | ![Static Splitline pose under Reduced Motion](../screenshots/v1.8/update-v18-reduced-motion.png) |
+
+The v1.8 files are deterministic local candidate captures. Their exact state hashes, PNG hashes, dimensions, and capture limits are recorded in the [v1.8 screenshot record](../screenshots/v1.8/README.md).
+
+### Preserved Smooth Ride evidence
+
 | Desktop live sample | Mobile live sample |
 |:---:|:---:|
 | ![Smooth Ride Lab over live desktop gameplay](../screenshots/v1.6/update-v16-performance-live.png) | <img src="../screenshots/v1.6/update-v16-performance-mobile.png" alt="Smooth Ride Lab at 390 by 844 and DPR 2" width="300"> |
@@ -136,6 +174,6 @@ These screenshots show the live runtime and telemetry panel. They are supporting
 
 ## Interpretation and limits
 
-This gate is designed to catch regressions such as an effect array growing without bound, fresh effect identity churn, synchronous main-loop work moving beyond budget, fixed-step backlog, stale controls after pointer cancellation, or layout/input ownership disagreeing after rotation. Pacing remains visible to expose scheduler stalls, but it is not confused with the callback-work regression budget.
+These gates are designed to catch regressions such as an effect array growing without bound, fresh effect identity churn, synchronous main-loop or crash work moving beyond budget, non-finite crash poses/cameras, broken retry cleanup, fixed-step backlog, stale controls after pointer cancellation, or layout/input ownership disagreeing after rotation. Pacing remains visible to expose scheduler stalls, but it is not confused with the callback-work regression budget.
 
 It does not substitute for profiling a production build on physical hardware. Before production release, record a comparable 10+ minute run on representative low/mid-tier Android hardware and an iPhone-class device. Include heavy dust/confetti/crash scenes, repeated retries, portrait/landscape rotation, background/foreground, real multi-touch, audio, haptics, browser UI expansion/collapse, thermal behavior, and battery impact. Also smoke-test the published GitHub Pages URL with a clean cache and an installed offline PWA.

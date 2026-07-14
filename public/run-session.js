@@ -136,18 +136,23 @@ function awardScore(target, events, type, base, x, y, details = {}) {
   return recordScore(target, events, type, base, x, y, details);
 }
 
-function enterCrash(target, reason, events) {
+function enterCrash(target, authoritativeReason, events, presentationReason = authoritativeReason) {
   target.state = 'crashed';
   target.crashTimer = target.runSessionOptions.crashDuration;
   target.crashAge = 0;
   target.combo = 1;
   target.comboTimer = 0;
-  target.lastCrash = reason ? clonePlainEvent(reason) : null;
-  const x = reason?.x ?? target.bike.head.x;
-  const y = reason?.y ?? target.bike.head.y;
+  target.lastCrash = authoritativeReason ? clonePlainEvent(authoritativeReason) : null;
+  const presentation = presentationReason ? clonePlainEvent(presentationReason) : null;
+  const x = presentation?.x ?? authoritativeReason?.x ?? target.bike.head.x;
+  const y = presentation?.y ?? authoritativeReason?.y ?? target.bike.head.y;
   events.crash = {
-    type: reason?.type || 'collision',
-    reason: target.lastCrash,
+    type: presentation?.type || authoritativeReason?.type || 'collision',
+    // Presentation consumers may annotate their copy without gaining a path
+    // back into replay-authoritative session state. Natural terrain/platform
+    // contact stays presentation-only so existing proof hashes do not change.
+    reason: presentation ? clonePlainEvent(presentation)
+      : target.lastCrash ? clonePlainEvent(target.lastCrash) : null,
     x,
     y,
     duration: target.crashTimer,
@@ -376,7 +381,7 @@ export function stepPlayingRun(target, rawInput, dt = RUN_SESSION_STEP) {
   }
 
   if (rules.finished && !bike.crashed) enterFinish(target, events);
-  else if (bike.crashed) enterCrash(target, rules.crash, events);
+  else if (bike.crashed) enterCrash(target, rules.crash, events, rules.crash || bike.crashContact);
   else if (bike.y > target.falloutY) {
     bike.crashed = true;
     enterCrash(target, { type: 'fallout' }, events);

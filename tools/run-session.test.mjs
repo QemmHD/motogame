@@ -55,6 +55,29 @@ function crashFixture() {
   return { name: 'Retry Fixture', world: 'Test', course, star: [8, 12, 20] };
 }
 
+function naturalCrashFixture(kind) {
+  const terrainHeadStrike = kind === 'terrain';
+  const course = {
+    startX: 0,
+    startY: 240,
+    chains: terrainHeadStrike
+      ? [
+        [{ x: -18, y: 165, surface: 'gravel' }, { x: 18, y: 165, surface: 'gravel' }],
+        [{ x: -400, y: 400 }, { x: 900, y: 400 }],
+      ]
+      : [[{ x: -400, y: 400 }, { x: 900, y: 400 }]],
+    checkpoints: [{ x: 0, y: 240 }],
+    hazards: [],
+    platforms: terrainHeadStrike ? [] : [{
+      id: 'cause-deck', x: 0, y: 177, width: 120, height: 20,
+      surface: 'steel', startActive: true,
+    }],
+    finishX: 800,
+    bounds() { return { minY: 165, maxY: 400 }; },
+  };
+  return { name: `${kind} Cause Fixture`, world: 'Test', course, star: [8, 12, 20] };
+}
+
 function manualRetryScript(level) {
   const target = {};
   initializeRunSession(target, level, 91);
@@ -168,6 +191,41 @@ test('the 1.85 second crash timer auto-respawns on the same fixed tick', () => {
   assert.ok(respawn);
   assert.equal(target.state, 'playing');
   assert.ok(Math.abs(target.elapsed - elapsedAtCrash - crashTicks * DT) < 1e-10);
+});
+
+test('crash presentation reasons are natural and detached from authoritative session state', () => {
+  const target = {};
+  initializeRunSession(target, crashFixture(), 91);
+  let crash = null;
+  for (let tick = 0; tick < 600 && !crash; tick++) {
+    crash = stepPlayingRun(target, gas, DT).crash;
+  }
+  assert.ok(crash?.reason);
+  const authoritative = snapshotRunSession(target);
+  const storedReason = structuredClone(target.lastCrash);
+  assert.notEqual(crash.reason, target.lastCrash);
+  crash.reason.type = 'presentation-only-mutation';
+  crash.reason.x = Infinity;
+  crash.reason.details = { nested: true };
+  assert.deepEqual(target.lastCrash, storedReason);
+  assert.deepEqual(snapshotRunSession(target), authoritative);
+
+  for (const type of ['terrain', 'platform']) {
+    const naturalTarget = {};
+    initializeRunSession(naturalTarget, naturalCrashFixture(type), 92);
+    const naturalCrash = stepPlayingRun(naturalTarget, neutral, DT).crash;
+    assert.ok(naturalCrash, `${type} fixture did not crash naturally`);
+    assert.equal(naturalCrash.type, type);
+    assert.equal(naturalCrash.reason?.type, type);
+    assert.equal(naturalTarget.lastCrash, null,
+      `${type} presentation metadata entered replay-authoritative lastCrash state`);
+    assert.equal(snapshotRunSession(naturalTarget).crash[2], null,
+      `${type} presentation metadata changed the proof snapshot`);
+    const naturalSnapshot = snapshotRunSession(naturalTarget);
+    naturalCrash.reason.type = 'presentation-only-mutation';
+    naturalCrash.reason.x = Infinity;
+    assert.deepEqual(snapshotRunSession(naturalTarget), naturalSnapshot);
+  }
 });
 
 test('initializing the same target again is an exact full restart', () => {
