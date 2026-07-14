@@ -45,7 +45,18 @@ Both profiles require canonical report and semantic text, matching action/disabl
 
 ### Hosted Actions confirmation — v1.8.1
 
-`pending`: record the draft pull request, gameplay SHA, hosted profile outputs, full-gate result, and skipped publish job after the branch is pushed. The local numbers above are not hosted or production evidence.
+[GitHub Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318), pinned to gameplay SHA [`27bcce2b66f4`](https://github.com/QemmHD/motogame/commit/27bcce2b66f46592c8ea83122067f43f915a27eb) in draft [PR #4](https://github.com/QemmHD/motogame/pull/4), passed the complete gate on the hosted Ubuntu runner:
+
+| Profile | Samples | Work p95 | Diagnostic pacing p95 | Peak effects / detail | Budget | Status |
+|---|---:|---:|---:|---:|---:|---|
+| Ordinary desktop 1280 × 720 @1 | 181 | 1.20 ms | 66.80 ms | 101/636; 628 fixed ticks | < 8 ms | Pass |
+| Ordinary mobile 390 × 844 @2 | 182 | 1.20 ms | 115.77 ms | 94/636; 816 fixed ticks | < 12 ms | Pass |
+| Crash desktop TNT | 182 | 2.10 ms | diagnostic | 17 parts; 177 pose ticks; 1,894 contacts | < 8 ms | Pass |
+| Crash mobile saw | 183 | 2.50 ms | diagnostic | 17 parts; 168 pose ticks; 1,287 contacts | < 12 ms | Pass |
+| Finish Forge desktop | 122 | 0.80 ms | diagnostic | 5 semantic / 5 enabled targets | < 8 ms | Pass |
+| Finish Forge mobile | 122 | 0.80 ms | diagnostic | 5 semantic / 5 enabled targets; narrow touch passed | < 12 ms | Pass |
+
+The hosted gate also passed 3 asset/offline checks, 127 deterministic systems, all 16 routes, and all 16 Gold tapes twice. Reduced Motion crash and finish invariants passed, the test job completed in 1m51s, and publishing was correctly skipped because this was a pull-request event. Hosted pacing reflects shared-runner scheduling and remains diagnostic; synchronous callback-work budgets passed.
 
 The final local aggregate `npm test` completed in **334.1 seconds** and passed 3 asset checks, 127 deterministic systems, all 16 routes, 32 Gold replays, both ordinary profiles, all three crash profiles, and both Finish Forge profiles.
 

@@ -4,7 +4,7 @@ This directory is organized as the permanent visual and engineering record for t
 
 ## Latest release candidate
 
-- [v1.8.1 — Fast Failure, Great Finish](releases/v1.8.1.md): original Finish Forge receipt, authoritative arithmetic, itemized score ledger, PB/tie decisions, guarded routes, keyboard/touch/gamepad parity, semantic dialog, reset ownership, strict browser gate, four inspected captures, compatibility boundary, and explicit delivery limits.
+- [v1.8.1 — Fast Failure, Great Finish](releases/v1.8.1.md): original Finish Forge receipt, authoritative arithmetic, itemized score ledger, PB/tie decisions, guarded routes, keyboard/touch/gamepad parity, semantic dialog, reset ownership, complete local/hosted gates, four inspected captures, compatibility boundary, and explicit delivery limits.
 - [Performance and interruption QA](qa/PERFORMANCE.md): exact v1.8.1 ordinary, Finish Forge, and preserved live-crash browser profiles; budgets, harness behavior, input matrices, reproduction commands, and limitations.
 - [Golden run QA](qa/GOLDEN_TAPES.md): all 16 v1.8.1 build-refreshed repository recovery tapes, exact unchanged v1.8.0 outcomes, reproduction commands, and limitations.
 - [Screenshot archive](screenshots/README.md): versioned desktop, gameplay, debug, proof, performance, rotation, accessibility, and mobile captures.

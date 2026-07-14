@@ -19,7 +19,7 @@ The v1.8.1 refresh is intentional but **build-only**. Finish Forge changes playe
 
 A direct manifest comparison against the reviewed v1.8.0 catalog found no changed non-token field for any of the 16 levels: finish tick, replay/tape/run ticks, elapsed/net time, score, recovery count, and authoritative state hash are identical. Only the manifest build plus build-bearing tokens changed. This is the central v1.8.1 tradeoff: explicit package compatibility costs a token refresh, while unchanged physics/course identities and exact baseline comparison make clear that Finish Forge did not alter run authority.
 
-The current `npm run test:goldens` was recorded on 2026-07-14: all 16 entries replayed twice in clean browser contexts for **32 exact passes with no divergence**. This proves authoritative finish reproduction; it does not test whether Finish Forge layout, focus, semantics, input edges, ceremony, or Crash Theater presentation look or feel correct because those are intentionally excluded from proof hashes and have separate browser/capture gates.
+The current `npm run test:goldens` was recorded locally and independently in [hosted Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318) on 2026-07-14: all 16 entries replayed twice in clean browser contexts for **32 exact passes with no divergence**. This proves authoritative finish reproduction; it does not test whether Finish Forge layout, focus, semantics, input edges, ceremony, or Crash Theater presentation look or feel correct because those are intentionally excluded from proof hashes and have separate browser/capture gates.
 
 ## Current reference catalog
 

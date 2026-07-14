@@ -29,7 +29,7 @@
   <img alt="16 verified Gold Runs" src="https://img.shields.io/badge/Gold%20Runs-16%2F16-ffd23e">
   <img alt="expanded deterministic system gate" src="https://img.shields.io/badge/systems-expanded%20gate%20passing-2b9f71">
   <img alt="offline-ready PWA" src="https://img.shields.io/badge/PWA-offline--ready-6c52b8">
-  <img alt="v1.8.1 hosted gate pending" src="https://img.shields.io/badge/v1.8.1%20hosted%20gate-pending-8a8f98">
+  <img alt="v1.8.1 hosted gate passing" src="https://img.shields.io/badge/v1.8.1%20hosted%20gate-passing-2b9f71">
 </p>
 
 ---
@@ -128,7 +128,7 @@ Finish Forge is drawn from Canvas primitives in an original forged-steel and sig
 
 Every result route clears finish focus/timers, semantic controls, announcements, pooled effects and tracks, camera/crash state, pending restart state, UI-input edges, scheduled audio, and active synthesized effect sources. Save records and unlock counts are normalized on read while the existing save key and field meanings remain compatible.
 
-The v1.8.1 local gate passes 3 asset checks, 127 deterministic systems, all 16 physics routes, 32 exact Gold replays, ordinary desktop/mobile performance, three Crash Theater regression profiles, and a dedicated Finish Forge browser matrix in 334.1 seconds. Ordinary callback-work p95 is 1.10 ms desktop and 0.90 ms mobile DPR 2. Chrome 150 Finish Forge recorded 123 desktop callbacks at 0.70 ms p95 and 127 mobile DPR 2 callbacks at 0.60 ms p95, plus native semantic Tab/Enter, repeated-key suppression, keyboard shortcuts, standard fake-gamepad, 320 × 568 geometry, and actual touch-center Retry coverage. Four fixed Canvas scenes rendered twice with zero pixel/channel disagreement. The final draft-PR hosted gate, physical-device/input/assistive-technology smoke, and production Pages/cache/install/offline checks remain pending.
+The v1.8.1 local gate passes 3 asset checks, 127 deterministic systems, all 16 physics routes, 32 exact Gold replays, ordinary desktop/mobile performance, three Crash Theater regression profiles, and a dedicated Finish Forge browser matrix in 334.1 seconds. Ordinary callback-work p95 is 1.10 ms desktop and 0.90 ms mobile DPR 2. Chrome 150 Finish Forge recorded 123 desktop callbacks at 0.70 ms p95 and 127 mobile DPR 2 callbacks at 0.60 ms p95, plus native semantic Tab/Enter, repeated-key suppression, keyboard shortcuts, standard fake-gamepad, 320 × 568 geometry, and actual touch-center Retry coverage. Four fixed Canvas scenes rendered twice with zero pixel/channel disagreement. Draft [PR #4](https://github.com/QemmHD/motogame/pull/4) pins gameplay commit [`27bcce2`](https://github.com/QemmHD/motogame/commit/27bcce2b66f46592c8ea83122067f43f915a27eb), and [hosted Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318) passed the same 3/127/16/32 gate plus every browser profile; publishing was correctly skipped. Physical-device/input/assistive-technology smoke and production Pages/cache/install/offline checks remain pending.
 
 Read the [v1.8.1 release record](docs/releases/v1.8.1.md), [project pickup state](docs/PROJECT_STATE.md), or [Finish Forge capture record](docs/screenshots/v1.8.1/README.md).
 

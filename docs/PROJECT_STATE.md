@@ -15,15 +15,15 @@ This is the canonical pickup note for the active repository state. Update it whe
 | Replay identity | schema `1`; physics `physics-4`; course `course-4` |
 | Working branch | `agent/motorush-v181-fast-failure` |
 | Remote | `https://github.com/QemmHD/motogame.git` |
-| Gameplay commit | `pending final v1.8.1 commit` |
-| Draft pull request | `pending v1.8.1 push`; preserved [v1.8 draft `#3`](https://github.com/QemmHD/motogame/pull/3), v1.7 draft `#2`, and v1.6 draft `#1` remain reviewable |
-| Hosted gate | `pending v1.8.1 draft-PR run`; preserved v1.8 [Actions run 29320024589](https://github.com/QemmHD/motogame/actions/runs/29320024589) passed with publish skipped |
-| Candidate delivery state | Uncommitted local v1.8.1 candidate; deterministic/browser/visual gates pass, while commit/push/hosted, physical-device, assistive-technology, and production evidence are `pending` |
+| Gameplay commit | [`27bcce2b66f4`](https://github.com/QemmHD/motogame/commit/27bcce2b66f46592c8ea83122067f43f915a27eb) |
+| Draft pull request | [#4 — Ship v1.8.1: Fast Failure, Great Finish](https://github.com/QemmHD/motogame/pull/4) |
+| Hosted gate | [Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318) passed; publish skipped |
+| Candidate delivery state | Committed and pushed v1.8.1 draft candidate; deterministic/browser/visual/hosted gates pass, while physical-device, assistive-technology, review/merge, and production evidence are `pending` |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment boundary | `public/`, published to `gh-pages` only through the eligible workflow |
 | Save key | `motoRushX3.save.v1` |
 
-The v1.8.1 work exists locally on `agent/motorush-v181-fast-failure`. Do not invent a commit, pull request, hosted run, or public deployment until each action succeeds and its exact reference is written here. The preserved v1.8 gameplay candidate remains in draft [PR #3](https://github.com/QemmHD/motogame/pull/3) at final SHA `8e58b06f4a367d90fd0177a8cd06c4c313d569f0`; its [hosted Actions run 29320024589](https://github.com/QemmHD/motogame/actions/runs/29320024589) passed and skipped publishing. The v1.7 predecessor remains separately reviewable in draft PR [`#2`](https://github.com/QemmHD/motogame/pull/2). Do not describe v1.8.1 as merged, deployed, production-smoked, or live until each state has direct evidence.
+The v1.8.1 work is committed and pushed on `agent/motorush-v181-fast-failure`. Draft [PR #4](https://github.com/QemmHD/motogame/pull/4) is pinned to gameplay SHA `27bcce2b66f46592c8ea83122067f43f915a27eb`; [hosted Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318) passed and the ineligible feature-branch publish job was correctly skipped. The preserved v1.8 candidate remains reviewable in draft [PR #3](https://github.com/QemmHD/motogame/pull/3), and v1.7 in draft [PR #2](https://github.com/QemmHD/motogame/pull/2). Do not describe v1.8.1 as merged, deployed, production-smoked, or live until each state has direct evidence.
 
 The build-version field is part of replay compatibility. Repository Gold tokens were intentionally refreshed for `1.8.1` while replay schema `1`, `physics-4`, and `course-4` remain unchanged. A direct v1.8.0/v1.8.1 manifest comparison finds no changed non-token field for any of the 16 routes: finish/replay/run ticks, elapsed/net time, score, crash/recovery count, and authoritative state hashes are identical. This is a build-only compatibility refresh for result presentation/input/accessibility and cache identity, not a physics or course migration. Save storage remains `motoRushX3.save.v1`.
 
@@ -165,7 +165,7 @@ The current v1.8.1 local gate used Chrome 150 and recorded ordinary play, preser
 
 The mobile ordinary pass asserts disjoint and unclipped ride zones at 390 × 844 and 320 × 568, two-pointer gas/lean aggregation, selective pointer cancellation, blur pause/clear, portrait-to-844 × 390 rotation pause/clear, exact canvas resize, telemetry counters, and left-hand UI/layout state. The two dynamic crash profiles advanced to pose ticks 177/168 with 1,894/1,287 raw contacts while crashed sessions, ragdoll contact, impacts, particles, camera, and retry timers remained live. Finish Forge exposed five semantic actions and five enabled 44 px-or-larger Canvas targets in each full scene; desktop passed keyboard plus standard-gamepad rising-edge navigation/confirm/back/held-A suppression, and mobile passed five non-overlapping 320 × 568 targets plus actual touch-center Retry. Both result profiles also prove canonical receipt/semantic parity, missing/locked route safety, Reduced Motion, clean reset, and zero page/console/request/HTTP errors. These are repeatable local headless-Chrome measurements, not evidence for compositor/GPU behavior or every physical device.
 
-The v1.8.1 hosted full gate is pending its draft PR. Preserved v1.8 [Actions run `29320024589`](https://github.com/QemmHD/motogame/actions/runs/29320024589), pinned to final SHA `8e58b06f4a367d90fd0177a8cd06c4c313d569f0`, passed and skipped publishing. The preserved [v1.7 hosted run `29307193559`](https://github.com/QemmHD/motogame/actions/runs/29307193559) remains earlier predecessor evidence.
+The v1.8.1 hosted full gate passed in [Actions run `29324957318`](https://github.com/QemmHD/motogame/actions/runs/29324957318), pinned to gameplay SHA `27bcce2b66f46592c8ea83122067f43f915a27eb`. It passed 3 assets, 127 systems, 16 routes, 32 Gold replays, two ordinary profiles at 1.20/1.20 ms p95, dynamic crash profiles at 2.10/2.50 ms p95 plus the static Reduced Motion invariant, and both Finish Forge profiles at 0.80 ms p95. The test job completed in 1m51s and publishing was correctly skipped. Preserved v1.8 run `29320024589` and v1.7 run `29307193559` remain predecessor evidence.
 
 ## Repository Gold Run evidence
 
@@ -293,12 +293,12 @@ The v1.5 Gold/reference/collision gallery and v1.4 gallery remain preserved unde
 
 | Update | Status in v1.8.1 candidate | Evidence | Still open |
 |---|---|---|---|
-| U01 Release Gate | Release candidate | Local v1.8.1 assets, 127 systems, 16 routes, 32 Gold passes, 2 ordinary, 3 crash, and 2 Finish Forge profiles plus 4 captures | Final commit/PR/hosted gate, eligible deploy, production cache/install/offline smoke |
+| U01 Release Gate | Release candidate | Local and hosted v1.8.1 assets, 127 systems, 16 routes, 32 Gold passes, 2 ordinary, 3 crash, and 2 Finish Forge profiles plus 4 captures | Review/eligible deploy and production cache/install/offline smoke |
 | U02 Restart Contract | Partial foundation | Shared DOM-free session, 50-repeat rules restore, exact hazard/platform snapshots, extracted ride/UI input, explicit Finish Forge reset audit | Physical input/device restart matrix and further renderer/audio/persistence splits |
 | U03 Smooth Ride | Release candidate | Hard-bounded 384/32/220 pools, typed-ring metrics, 17 input tests, 6 metric tests, 2-profile p95, cancel/blur/rotation/left-hand matrix | Physical low-end phone and production-profile confirmation |
 | U04 Collision Keystone | Partial foundation | Swept platforms/hazards, stateless swept Kinetic Looms, bounded proxies, aligned browser overlay, retry fixtures | General moving/rotating/two-sided closed chains |
 | U05 Crash Theater | Release candidate | 17-part Splitline rig, ten causes, detached swept contact, 48-event impact bound, seeded FX/camera, ragdoll proxies, 30 finite/settling scripts, exact repeat, Reduced Motion invariants, local/hosted crash-browser passes, 4 inspected captures | Physical cause/retry matrix |
-| U06 Fast Failure, Great Finish | Release candidate | Exact DOM-free receipt/route policy, canonical PB timing, itemized score ledger, 5-action responsive Finish Forge, semantic dialog, keyboard/touch/standard-gamepad gate, Reduced Motion, full reset audit, 4 inspected captures | Physical input/assistive-technology matrix and hosted/production evidence |
+| U06 Fast Failure, Great Finish | Release candidate | Exact DOM-free receipt/route policy, canonical PB timing, itemized score ledger, 5-action responsive Finish Forge, semantic dialog, keyboard/touch/standard-gamepad local+hosted gates, Reduced Motion, full reset audit, 4 inspected captures | Physical input/assistive-technology matrix and production evidence |
 | U07 Engine Soul | Playable preview | Landing grades, momentum retention, five gear bands, reactive audio | Wheelie meter, tire/surface layers, measured envelopes/audio budget |
 | U09 Proof Replays | Release candidate | 16 build-refreshed tapes, 32 exact browser passes, no non-token v1.7 outcome change, explicit mismatch UI | Human route classes remain U10/U14 work |
 | U10 Moving Ground | Playable preview | Ten-cycle carry, bounded inheritance, triggered lift, exact restore, proxy audit | Broader/rotating geometry, dedicated framing, human safe/apex tapes |
@@ -309,7 +309,7 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Known gaps and risks
 
-- **Candidate delivery:** v1.8.1 is local and uncommitted; final commit/push, draft PR, hosted gate, review, and production promotion remain open. Preserved v1.8 draft PR #3 is predecessor evidence, not v1.8.1 delivery.
+- **Candidate delivery:** v1.8.1 is committed and pushed in draft PR #4 with a passing hosted gate and skipped publish; review, physical/assistive-technology evidence, merge, and production promotion remain open.
 - **Production:** the live URL can remain on an older build until review, eligible merge, publish, and direct smoke; local candidate tests are not production evidence.
 - **Crash visuals:** the four required browser captures pass local full-resolution inspection; physical browser/device rendering and the eventual production build remain unverified.
 - **Crash devices:** all ten causes, rapid manual retry, automatic retry, audio overlap, haptics, rotation, and long heavy-crash sessions still need representative physical keyboard/touch/gamepad and low-end-device smoke.
@@ -324,7 +324,7 @@ Do not promote other statuses because a primitive exists. `ROADMAP.md` acceptanc
 
 ## Immediate next priorities
 
-1. Create the final v1.8.1 gameplay/documentation commit, push the branch, open a draft PR, and record the hosted full gate with publishing skipped.
+1. Review draft PR #4; preserve the passing hosted gate and do not promote until the remaining physical/assistive-technology checks are accepted.
 2. Exercise Finish Forge plus all ten crash causes on physical keyboard, multitouch, real gamepad, and representative screen-reader/browser combinations; repeat heavy scenes on low-end Android and representative iOS hardware.
 3. Promote only after review; verify visible `v1.8.1`, eligible Pages workflow, cache replacement, installability, clean-cache load, and offline relaunch at the canonical URL.
 4. Continue U04 with broader moving/rotating or closed collision chains only with an explicit reset/proof contract; record human safe/apex runs separately and keep extracting renderer/audio/persistence ownership.

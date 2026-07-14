@@ -4,7 +4,7 @@ All notable Moto Rush X3 changes are recorded here so development can resume wit
 
 ## [1.8.1] — 2026-07-14 — Fast Failure, Great Finish (unmerged release candidate)
 
-This candidate completes the local implementation pass for U06 with the original **Finish Forge** run receipt, exact result arithmetic, safe route resolution, input parity, accessibility semantics, and explicit presentation reset ownership. Local deterministic, browser, Gold, route, performance, crash-regression, and four-image capture gates pass; the final commit, draft-PR hosted gate, physical-device coverage, and production deployment remain `pending` until recorded.
+This candidate completes U06 with the original **Finish Forge** run receipt, exact result arithmetic, safe route resolution, input parity, accessibility semantics, and explicit presentation reset ownership. Local deterministic, browser, Gold, route, performance, crash-regression, and four-image capture gates pass. Draft [PR #4](https://github.com/QemmHD/motogame/pull/4) and its hosted gate also pass at gameplay commit [`27bcce2`](https://github.com/QemmHD/motogame/commit/27bcce2b66f46592c8ea83122067f43f915a27eb); physical-device coverage and production deployment remain `pending`.
 
 ### Added
 
@@ -46,11 +46,11 @@ This candidate completes the local implementation pass for U06 with the original
 - **Crash browser profiles:** desktop TNT, mobile DPR 2 saw, and static Reduced Motion profiles retain the 17-part/contact/frozen-review/retry contract; final p95 was 3.10 ms desktop and 1.70 ms mobile.
 - **Finish Forge browser profiles:** Chrome 150 desktop produced 123 samples at 0.70 ms p95 with native semantic Tab/Enter, held-repeat suppression, keyboard shortcuts, and standard-gamepad flows; mobile DPR 2 produced 127 samples at 0.60 ms p95 plus five non-overlapping 320 × 568 targets and real touch-center Retry. Both exposed five semantic actions and five enabled 44 px-or-larger Canvas targets in the full scene, with no page/console/request/HTTP errors.
 - **Aggregate:** final `npm test` passed 3 asset checks, 127 deterministic systems, 16 routes, 32 Gold replays, and all ordinary/crash/result browser profiles in 334.1 seconds.
+- **Hosted QA:** [Actions run 29324957318](https://github.com/QemmHD/motogame/actions/runs/29324957318) passed 3 assets, 127 systems, 16 routes, 32 Gold replays, two ordinary profiles, three crash profiles, and two Finish Forge profiles. Hosted work p95 was 1.20/1.20 ms ordinary, 2.10/2.50 ms crash, and 0.80/0.80 ms Finish Forge for desktop/mobile. The publish job was correctly skipped.
 - **Visual QA:** four real Canvas scenes were generated twice in independent clean contexts and matched at zero changed pixels and zero maximum channel delta before full-resolution inspection.
 
 ### Pending before promotion
 
-- Record the final gameplay commit, draft pull request, hosted Actions run, and correctly skipped publish job.
 - Smoke physical keyboard, multitouch, real gamepad, screen-reader/browser combinations, low-end performance, and finish/crash boundary holds.
 - After review and eligible merge only, verify visible `v1.8.1`, Pages publish, service-worker replacement, installability, clean-cache reload, and offline relaunch.
 
