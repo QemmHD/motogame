@@ -44,7 +44,7 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - Pages publishing is restricted to a successful push on `main`; pull requests and manual dispatches run tests without publishing, and the stale legacy release branch can no longer deploy production.
 - The hosted browser-performance gate now injects a bounded 360-sample probe around the game's sole animation-frame callback, measures for at least three seconds and up to fifteen seconds to collect 180 samples, and reports scheduler pacing separately from synchronous game work. Browser version and complete work/pacing diagnostics print before assertions; profile p95 budgets are not relaxed.
 - After a passing hosted reference measured 1.10 ms desktop and 1.20 ms mobile work p95, the regression ceilings were tightened to 8 ms and 12 ms instead of retaining the earlier frame-interval-oriented 20/25 ms values.
-- GitHub Actions checkout and Node setup advance to their Node 24-based v5 runtimes, and the test/publish jobs now have explicit ten/five-minute timeout ceilings.
+- GitHub Actions checkout and Node setup advance to their current Node 24-based v6 runtimes, and the test/publish jobs now have explicit ten/five-minute timeout ceilings.
 
 ### Verification
 
