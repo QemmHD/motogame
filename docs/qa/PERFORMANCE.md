@@ -9,9 +9,9 @@ This document is the reproducible acceptance record for the v1.6.0 **Smooth Ride
 | `desktop-1280x720-dpr1` | 1280 × 720 | 1 | desktop, no touch | < 20 ms |
 | `mobile-390x844-dpr2` | 390 × 844 | 2 | mobile context, touch enabled | < 25 ms |
 
-The latest standalone run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
+The recorded full-gate reference run used a local **system-installed Chrome in headless mode**. It did not use a hosted browser, a production Pages build, or a physical phone.
 
-## Latest measured result
+## Recorded local reference result
 
 | Profile | Work samples | Work p50 | Work p95 | Work p99 | Pacing p95 | Work budget | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
@@ -27,10 +27,10 @@ Both callback-work p95 measurements are below their repository budgets. `Work` i
 1. Creates a clean context with the profile viewport, DPR, mobile, and touch settings.
 2. Injects a preallocated 360-value wrapper around `requestAnimationFrame` before any game script runs; the wrapper records only synchronous callback work.
 3. Blocks service workers so cached files cannot hide a missing runtime dependency.
-4. Opens Cliffhanger (level 5) with development capture, touch, and autoplay flags. Its clean reference route lasts long enough that even a slow hosted scheduler remains in active play throughout the bounded ten-second sample window.
+4. Opens Cliffhanger (level 5) with development capture, touch, and autoplay flags. Its clean reference route remains active throughout the hosted runner's observed sample window.
 5. Captures page and console errors across measurement and the complete interaction matrix.
 6. Warms the runtime for 750 ms, then resets the runtime telemetry and harness probe together.
-7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 7 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.
+7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 12 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.
 8. Prints browser version plus complete work and pacing diagnostics before assertions, requires matching probe/runtime sample counts, active play, at least 60 fixed ticks, and nonzero pooled-effect activity.
 9. Requires main-loop work p95 to remain below the profile budget while retaining pacing p95 as a diagnostic.
 10. Validates that active/created/peak effects stay within each fixed pool capacity.

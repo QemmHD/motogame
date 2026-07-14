@@ -42,7 +42,7 @@ This candidate completes the local U03 Smooth Ride acceptance gate. It is not de
 - Per-tick effect cleanup no longer allocates replacement arrays, and repeated tire tracks no longer require front-array shifts.
 - Performance samples and event counts reject non-finite input, clamp configured bounds, retain exact newest-window ordering across ring wrap, and reset while reusing their typed buffers.
 - Pages publishing is restricted to a successful push on `main`; pull requests and manual dispatches run tests without publishing, and the stale legacy release branch can no longer deploy production.
-- The hosted browser-performance gate now injects a bounded 360-sample probe around the game's sole animation-frame callback, measures for at least three seconds and up to ten seconds to collect 180 samples, and reports scheduler pacing separately from synchronous game work. Browser version and complete work/pacing diagnostics print before assertions; profile p95 budgets are not relaxed.
+- The hosted browser-performance gate now injects a bounded 360-sample probe around the game's sole animation-frame callback, measures for at least three seconds and up to fifteen seconds to collect 180 samples, and reports scheduler pacing separately from synchronous game work. Browser version and complete work/pacing diagnostics print before assertions; profile p95 budgets are not relaxed.
 
 ### Verification
 

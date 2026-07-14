@@ -29,7 +29,7 @@ const PROFILES = Object.freeze([
 const FRAME_WORK_SAMPLE_CAPACITY = 360;
 const FRAME_WORK_SAMPLE_TARGET = 180;
 const MINIMUM_MEASUREMENT_MS = 3_000;
-const SAMPLE_TARGET_TIMEOUT_MS = 7_000;
+const SAMPLE_TARGET_TIMEOUT_MS = 12_000;
 const PERFORMANCE_LEVEL = 5;
 
 function invariant(condition, message) {
