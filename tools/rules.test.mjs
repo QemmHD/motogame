@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildTerrain, createBike, setTerrainSegmentEnabled, terrainContact } from '../public/physics.js';
-import { createRunState, hazardPositionAt, stepRunRules } from '../public/rules.js';
+import { buildLevels } from '../public/levels.js';
+import { createRunState, hazardPositionAt, resetRunState, restoreCheckpointRunState,
+  stepRunRules } from '../public/rules.js';
 
 test('moving hazard positions are deterministic and level data stays immutable', () => {
   const hazard = { type: 'saw', x: 100, y: 80, baseX: 100, baseY: 80, r: 36,
@@ -52,4 +54,31 @@ test('TNT has a fuse and applies a non-lethal launch impulse outside its core', 
   assert.equal(blast.crash, null);
   assert.equal(blast.impulses.length, 1);
   assert.notEqual(bike.rear.ox, bike.rear.x, 'bike received no launch velocity');
+});
+
+test('full restart and checkpoint respawn are identical across repeated runs', () => {
+  for (const level of buildLevels()) {
+    const authored = JSON.stringify(level.course);
+    const pristine = createRunState(level);
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const dirty = createRunState(level);
+      const bike = createBike(level.course.startX + 500, level.course.startY - 80);
+      for (let tick = 0; tick < 37 + attempt; tick++) stepRunRules(level, dirty, bike);
+      const restarted = resetRunState(level);
+      assert.deepEqual(restarted, pristine, `${level.name}: full restart drifted at attempt ${attempt}`);
+
+      const checkpointIndex = Math.min(1, pristine.cpList.length - 1);
+      const reached = createRunState(level);
+      const cpBike = createBike(reached.cpList[checkpointIndex].x + 1, reached.cpList[checkpointIndex].y - 40);
+      stepRunRules(level, reached, cpBike);
+      const saved = structuredClone(reached.checkpointSnapshot);
+      for (let tick = 0; tick < 19; tick++) stepRunRules(level, reached, cpBike);
+      const checkpointRun = restoreCheckpointRunState(level, reached);
+      assert.equal(checkpointRun.tick, saved.tick);
+      assert.equal(checkpointRun.cpIndex, saved.cpIndex);
+      assert.deepEqual(checkpointRun.hazards, saved.hazards,
+        `${level.name}: checkpoint retry did not restore its machine snapshot`);
+      assert.equal(JSON.stringify(level.course), authored, `${level.name}: authored content mutated`);
+    }
+  }
 });

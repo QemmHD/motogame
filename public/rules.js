@@ -11,19 +11,49 @@ function len(x, y) { return Math.sqrt(x * x + y * y); }
 
 function runtimeHazard(h, index) {
   const x = h.baseX ?? h.x, y = h.baseY ?? h.y;
-  return { ...h, id: h.id || `hazard-${index}`, baseX: x, baseY: y,
+  return { ...h, motion: h.motion ? { ...h.motion } : null,
+    id: h.id || `hazard-${index}`, baseX: x, baseY: y,
     x, y, prevX: x, prevY: y, spin: 0, nearMissed: false,
     triggered: false, fuseTicks: -1, exploded: false };
 }
 
-export function createRunState(level) {
+function cloneHazard(h) {
+  return { ...h, motion: h.motion ? { ...h.motion } : null };
+}
+
+function makeCheckpointSnapshot(run) {
+  return { tick: run.tick, cpIndex: run.cpIndex, hazards: run.hazards.map(cloneHazard) };
+}
+
+export function createRunState(level, { checkpointIndex = 0 } = {}) {
   const course = level.course;
-  return {
+  const cpList = [{ x: course.startX, y: course.startY }, ...course.checkpoints.map(cp => ({ ...cp }))];
+  const cpIndex = clamp(Math.trunc(checkpointIndex) || 0, 0, Math.max(0, cpList.length - 1));
+  const run = {
     tick: 0,
-    cpIndex: 0,
-    cpList: [{ x: course.startX, y: course.startY }, ...course.checkpoints],
+    cpIndex,
+    cpList,
     hazards: course.hazards.map(runtimeHazard),
   };
+  run.checkpointSnapshot = makeCheckpointSnapshot(run);
+  return run;
+}
+
+// Full restarts deliberately return to the authored initial machine state.
+export function resetRunState(level, checkpointIndex = 0) {
+  return createRunState(level, { checkpointIndex });
+}
+
+// Checkpoint retries restore the exact tick/hazard snapshot recorded when the
+// checkpoint was crossed. They never inherit changes made after that point.
+export function restoreCheckpointRunState(level, previousRun) {
+  const snapshot = previousRun?.checkpointSnapshot;
+  if (!snapshot) return createRunState(level, { checkpointIndex: previousRun?.cpIndex || 0 });
+  const run = createRunState(level, { checkpointIndex: snapshot.cpIndex });
+  run.tick = snapshot.tick;
+  run.hazards = snapshot.hazards.map(cloneHazard);
+  run.checkpointSnapshot = makeCheckpointSnapshot(run);
+  return run;
 }
 
 function motionPosition(h, tick) {
@@ -132,6 +162,7 @@ export function stepRunRules(level, run, bike) {
     run.cpIndex++;
     events.checkpoint = { index: run.cpIndex, ...run.cpList[run.cpIndex] };
   }
+  if (events.checkpoint) run.checkpointSnapshot = makeCheckpointSnapshot(run);
   events.finished = bike.x > level.course.finishX;
   return events;
 }

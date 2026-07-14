@@ -7,6 +7,10 @@
 // AIR it runs as a crisp rigid body (explicit centre/angle/omega) so flips feel
 // tight and controllable. Velocities carry across the two modes continuously.
 
+import { resolveCircleOnPlatform } from './kinematics.js';
+
+export const PHYSICS_VERSION = 'physics-3';
+
 export const CONFIG = {
   wheelBase: 80,      // axle-to-axle
   wheelR: 18,         // wheel radius (collision + visual)
@@ -28,6 +32,7 @@ export const CONFIG = {
   rollResist: 0.6,    // gentle rolling resistance (fraction/sec-ish)
   restitution: 0.06,  // wheel bounce
   grip: 0.14,         // tangential slip damping on contact (0=slick,1=glue)
+  airborneGraceSteps: 12, // 33 ms hysteresis: filters contact chatter, preserves real jumps
 
   airAccel: 13.5,     // rad/s^2 while leaning airborne
   maxAirOmega: 9.0,   // rad/s cap
@@ -158,10 +163,11 @@ export function createBike(x, y, cfg = CONFIG) {
     mx: x, my: y, mvx: 0, mvy: 0, aAngle: 0, aOmega: 0,
     // status
     x, y, angle: 0, speed: 0, vx: 0, vy: 0, forwardSpeed: 0,
-    grounded: false, rearGround: false, frontGround: false,
-    crashed: false, airborne: false, airRot: 0,
+    grounded: false, rearGround: false, frontGround: false, platformGrounded: false,
+    crashed: false, airborne: false, airGapSteps: 0, airRot: 0,
     lastFlips: 0, flipEventId: 0, wheelSpin: 0,
     landedThisStep: false, landingImpact: 0,
+    landingGrade: 'none', landingQuality: 0, landingRetention: 1,
     // suspension (per-wheel sprung DOF, render/feel only)
     rSusp: cfg.suspSag, rSuspV: 0, fSusp: cfg.suspSag, fSuspV: 0,
     rearComp: cfg.suspSag, frontComp: cfg.suspSag,
@@ -212,6 +218,7 @@ function resolveWheel(b, T, node, driven, input, dt) {
   let vt = v.x * tx + v.y * ty;
   // record REAL contact load for the suspension spring (render/feel only)
   node._pen = c.pen; node._impact = vn < 0 ? -vn : 0; node._surface = c.surface;
+  node._tx = tx; node._ty = ty;
   // cancel into-surface velocity (small bounce); PRESERVE separation so the
   // bike can launch off ramps. tangential is the rolling axis -> keep it free.
   const ice = c.surface === 'ice', boost = c.surface === 'boost', bouncy = c.surface === 'bouncy';
@@ -258,6 +265,24 @@ function stepSusp(b, dt) {
   [b.fSusp, b.fSuspV] = step(b.fSusp, b.fSuspV, b.front._pen || 0, b.front._impact || 0);
 }
 
+function gradeLanding(b, impact, tangentX, tangentY, dt) {
+  const axleX = b.front.x - b.rear.x, axleY = b.front.y - b.rear.y;
+  const alignment = Math.abs((axleX * tangentX + axleY * tangentY)
+    / ((len(axleX, axleY) || 1) * (len(tangentX, tangentY) || 1)));
+  const impactScore = 1 - clamp((impact - 180) / 980, 0, 1);
+  const quality = clamp(alignment * 0.72 + impactScore * 0.28, 0, 1);
+  const grade = quality >= 0.91 ? 'perfect' : quality >= 0.75 ? 'clean'
+    : quality >= 0.53 ? 'rough' : 'slam';
+  const retention = grade === 'perfect' ? 1 : grade === 'clean' ? 1
+    : grade === 'rough' ? 0.995 : 0.98;
+  for (const node of nodesArr(b)) {
+    const velocity = velOf(node, dt);
+    setVel(node, velocity.x * retention, velocity.y, dt);
+  }
+  b.landingImpact = impact; b.landingQuality = quality;
+  b.landingGrade = grade; b.landingRetention = retention;
+}
+
 function layoutAir(b) {
   const cfg = b.cfg, A = b.aAngle;
   const c = Math.cos(A), s = Math.sin(A);
@@ -289,9 +314,10 @@ function substep(b, T, input, dt) {
   // Is the bike touching ground with either wheel right now?
   const cRear = terrainContact(T, b.rear.x, b.rear.y, cfg.wheelR);
   const cFront = terrainContact(T, b.front.x, b.front.y, cfg.wheelR);
-  const touching = !!(cRear || cFront);
+  const touching = !!(cRear || cFront || b.platformGrounded);
 
   if (touching) {
+    b.airGapSteps = 0;
     if (b.mode === 'air') b.mode = 'ground'; // velocities already live in nodes
     // Verlet integrate
     for (const n of nodesArr(b)) {
@@ -314,14 +340,19 @@ function substep(b, T, input, dt) {
     if (b.airborne && !b.crashed) { // just landed cleanly
       b.airborne = false;
       b.landedThisStep = true;
-      b.landingImpact = Math.max(b.rear._impact || 0, b.front._impact || 0);
+      const rearImpact = b.rear._impact || 0, frontImpact = b.front._impact || 0;
+      const landingNode = rearImpact >= frontImpact ? b.rear : b.front;
+      gradeLanding(b, Math.max(rearImpact, frontImpact),
+        landingNode._tx || 1, landingNode._ty || 0, dt);
       const n = Math.trunc(Math.abs(b.airRot) / (2 * Math.PI) + 0.15);
       if (n > 0) { b.lastFlips = n * Math.sign(b.airRot); b.flipEventId++; }
       b.airRot = 0;
     }
   } else {
     if (b.mode === 'ground') { seedAir(b, dt); b.mode = 'air'; }
-    b.airborne = true; b.grounded = false; b.rearGround = b.frontGround = false;
+    b.airGapSteps = (b.airGapSteps || 0) + 1;
+    if (b.airGapSteps >= cfg.airborneGraceSteps) b.airborne = true;
+    b.grounded = false; b.rearGround = b.frontGround = false;
     b.rear._pen = b.rear._impact = 0; b.front._pen = b.front._impact = 0;
     const lean = (input.leanFwd ? 1 : 0) - (input.leanBack ? 1 : 0);
     b.mvy += cfg.gravity * dt;
@@ -341,11 +372,7 @@ function substep(b, T, input, dt) {
 }
 
 // Advance one frame (sub-stepped).
-export function stepBike(bike, terrain, input, frameDt) {
-  bike.landedThisStep = false; bike.landingImpact = 0;
-  const dt = frameDt / bike.cfg.substeps;
-  for (let i = 0; i < bike.cfg.substeps; i++) substep(bike, terrain, input, dt);
-  // publish render/status fields
+function publishBikeState(bike, frameDt) {
   bike.x = (bike.rear.x + bike.front.x) / 2;
   bike.y = (bike.rear.y + bike.front.y) / 2;
   bike.angle = Math.atan2(bike.front.y - bike.rear.y, bike.front.x - bike.rear.x);
@@ -355,6 +382,92 @@ export function stepBike(bike, terrain, input, frameDt) {
   bike.speed = len(bike.vx, bike.vy);
   bike.forwardSpeed = bike.vx * Math.cos(bike.angle) + bike.vy * Math.sin(bike.angle);
   bike.rearComp = bike.rSusp; bike.frontComp = bike.fSusp;
+}
+
+export function stepBike(bike, terrain, input, frameDt) {
+  bike.landedThisStep = false; bike.landingImpact = 0;
+  bike.framePrevious = {
+    rear: { x: bike.rear.x, y: bike.rear.y },
+    front: { x: bike.front.x, y: bike.front.y },
+    head: { x: bike.head.x, y: bike.head.y },
+  };
+  const dt = frameDt / bike.cfg.substeps;
+  for (let i = 0; i < bike.cfg.substeps; i++) substep(bike, terrain, input, dt);
+  publishBikeState(bike, frameDt);
+}
+
+// Resolve the three bike bodies against deterministic one-way moving decks.
+// The platform solver works at frame cadence while node velocity is converted
+// back into the bike's substep Verlet representation before the next tick.
+export function resolveBikePlatforms(bike, kinematicRun, frameDt, input = null) {
+  if (!bike || bike.crashed || !kinematicRun?.platforms?.length) return [];
+  const contacts = [], subDt = frameDt / bike.cfg.substeps;
+  const controls = input || {};
+  const wasAirborne = bike.airborne;
+  let rearHit = false, frontHit = false, landingImpact = 0;
+  const applyDeckDrive = (node, contact) => {
+    const cfg = bike.cfg;
+    const velocity = velOf(node, subDt);
+    const surfaceVx = contact.inheritedVelocity?.x || 0;
+    const facing = bike.front.x >= bike.rear.x ? 1 : -1;
+    const traction = contact.pose.surface === 'ice' ? 0.24 : 1;
+    let relativeForward = (velocity.x - surfaceVx) * facing;
+    if (controls.gas && relativeForward < cfg.maxSpeed) {
+      relativeForward = Math.min(
+        relativeForward + cfg.driveAccel * traction * frameDt,
+        cfg.maxSpeed,
+      );
+    }
+    if (controls.brake) {
+      const brake = cfg.brakeAccel * traction * frameDt;
+      relativeForward = relativeForward > 30
+        ? Math.max(relativeForward - brake, 0)
+        : Math.max(relativeForward - brake, -cfg.reverseSpeed);
+    }
+    relativeForward = clamp(relativeForward, -cfg.reverseSpeed, cfg.maxLinearSpeed);
+    setVel(node, surfaceVx + relativeForward * facing, velocity.y, subDt);
+    capNodeVelocity(node, subDt, cfg.maxLinearSpeed);
+    bike.wheelSpin += relativeForward / cfg.wheelR * frameDt;
+  };
+  const resolveNode = (node, previous, radius, platform, kind) => {
+    const circle = { x: node.x, y: node.y, prevX: previous.x, prevY: previous.y, r: radius };
+    const incomingVy = (node.y - previous.y) / frameDt - (platform.current?.vy || 0);
+    const contact = resolveCircleOnPlatform(circle, platform, {
+      tickRate: 1 / frameDt, tangentRetention: kind === 'head' ? 0.35 : 0.88,
+      maxCarrySpeed: bike.cfg.maxSpeed * 1.25, maxLaunchSpeed: 760,
+    });
+    if (!contact) return null;
+    node.x = circle.x; node.y = circle.y;
+    setVel(node, (circle.x - circle.prevX) / frameDt, (circle.y - circle.prevY) / frameDt, subDt);
+    if (kind === 'rear') applyDeckDrive(node, contact);
+    node._surface = contact.pose.surface; node._platform = contact.platformId;
+    landingImpact = Math.max(landingImpact, Math.max(0, incomingVy));
+    contacts.push({ ...contact, node: kind });
+    return contact;
+  };
+
+  for (const platform of kinematicRun.platforms) {
+    const localRear = !!resolveNode(bike.rear, bike.framePrevious.rear, bike.cfg.wheelR, platform, 'rear');
+    const localFront = !!resolveNode(bike.front, bike.framePrevious.front, bike.cfg.wheelR, platform, 'front');
+    rearHit = localRear || rearHit; frontHit = localFront || frontHit;
+    if (resolveNode(bike.head, bike.framePrevious.head, bike.cfg.headR, platform, 'head')) bike.crashed = true;
+  }
+  bike.platformGrounded = rearHit || frontHit;
+  if (rearHit || frontHit) {
+    bike.airGapSteps = 0;
+    solveConstraints(bike);
+    bike.mode = 'ground'; bike.rearGround = bike.rearGround || rearHit;
+    bike.frontGround = bike.frontGround || frontHit; bike.grounded = true;
+    if (wasAirborne && !bike.crashed) {
+      bike.airborne = false; bike.landedThisStep = true;
+      gradeLanding(bike, landingImpact, 1, 0, subDt);
+      const flips = Math.trunc(Math.abs(bike.airRot) / (2 * Math.PI) + 0.15);
+      if (flips > 0) { bike.lastFlips = flips * Math.sign(bike.airRot); bike.flipEventId++; }
+      bike.airRot = 0;
+    }
+  }
+  publishBikeState(bike, frameDt);
+  return contacts;
 }
 
 // Adds an instantaneous velocity change to the bike. This is the shared,

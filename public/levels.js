@@ -8,6 +8,8 @@
 
 const STEP = 10;
 
+export const COURSE_VERSION = 'course-2';
+
 export class Course {
   constructor(startX, startY) {
     this.x = startX; this.y = startY;
@@ -15,7 +17,7 @@ export class Course {
     this.ground = [{ x: startX - 240, y: startY }, { x: startX, y: startY }];
     this.chains = [this.ground];
     this.render = [{ type: 'ground', pts: this.ground }];
-    this.hazards = []; this.checkpoints = []; this.decos = [];
+    this.hazards = []; this.platforms = []; this.checkpoints = []; this.decos = [];
     this.finishX = null; this.finishPt = null;
     this.minY = startY; this.maxY = startY;
     this._surface = 'dirt'; this._surfaceStrength = 1;
@@ -94,8 +96,16 @@ export class Course {
       motion: { kind: 'piston', axis: 'y', amplitude: travel, period, phase } });
   }
   tnt(dx = 0, dy = -24, opts = {}) {
-    return this.hazard('tnt', { dx, dy, r: 30, fuse: opts.fuse ?? 0.14,
-      boost: opts.boost ?? 760, core: opts.core ?? 44 });
+    return this.hazard('tnt', { dx, dy, r: 30, fuse: opts.fuse ?? 0.18,
+      boost: opts.boost ?? 760, core: opts.core ?? 30 });
+  }
+  platform(dx = 0, dy = -80, opts = {}) {
+    const id = opts.id || `platform-${this.platforms.length}`;
+    this.platforms.push({ id, x: this.x + dx, y: this.y + dy,
+      width: opts.width ?? 170, height: opts.height ?? 22,
+      surface: opts.surface || 'metal', motion: opts.motion || { kind: 'static' },
+      render: { model: opts.model || 'freight', warningStripe: opts.warningStripe !== false } });
+    return this;
   }
   deco(type, opts = {}) { this.decos.push({ type, x: this.x + (opts.dx || 0), y: this.y + (opts.dy || 0) }); return this; }
   checkpoint() { this.checkpoints.push({ x: this.x, y: this.y }); this.deco('checkpoint', {}); return this; }
@@ -201,7 +211,7 @@ function level5() { // Cliffhanger: big drops, flip gaps, steep landings
   c.flat(120).checkpoint();
   c.dip(300, 86).hill(300, 78);
   c.jump(320, 235, 80, 280, 230, { landDrop: 30 });     // biggest air
-  c.flat(120).saw(0, 190).flat(130);       // high route remains safe at full send
+  c.flat(120).saw(0, 220).flat(130);       // high route remains safe after varied landings
   c.jump(300, 220, 78, 270, 220, { landDrop: 40 });
   c.flat(120).checkpoint();
   c.whoops(5, 130, 30);
@@ -234,7 +244,7 @@ function level6() { // Grand Finale: everything, longer, climactic
   c.flat(120).checkpoint();
   c.dip(300, 86).hill(300, 78);
   c.jump(320, 235, 80, 280, 230, { landDrop: 30, pit: 'barrel', nPit: 2 });
-  c.flat(160).saw(0, 150).flat(160);
+  c.flat(160).saw(0, 220).flat(160);
   c.hill(300, 70).finish();
   return { name: 'Grand Finale', world: 'Canyon Run', course: c, star: [40, 56, 76] };
 }
@@ -312,7 +322,51 @@ function level12() { // Stormbreak: full first-campaign remix and spectacle fini
   return { name: 'Stormbreak', world: 'Stormworks', course: c, star: [38, 53, 72] };
 }
 
+function level13() { // Freight Flight: optional moving decks above a safe service road
+  const c = new Course(180, 320);
+  c.flat(260).checkpoint().ramp(190, 72).flat(80)
+    .platform(95, -108, { id: 'freight-rail-a', width: 190,
+      motion: { kind: 'horizontal-sine', amplitude: 82, period: 2.8, phase: 0.1 } });
+  c.fall(280, 72).flat(260).checkpoint().hill(300, 76)
+    .platform(100, -118, { id: 'freight-lift-a', width: 160,
+      motion: { kind: 'lift', distance: 112, period: 3.2, direction: -1 } });
+  c.dip(320, 88).boost(190, 0.72).jump(100, 215, 74, 260, 215).flat(150).checkpoint();
+  c.whoops(4, 134, 24).platform(140, -104, { id: 'freight-rail-b', width: 210,
+    motion: { kind: 'horizontal-ping-pong', amplitude: 100, period: 3.4, phase: 0.35 } });
+  c.flat(300).hill(300, 68).finish();
+  return { name: 'Freight Flight', world: 'R&D Yard', course: c, star: [20, 29, 42] };
+}
+
+function level14() { // Lift Logic: vertical decks create timing and recovery lines
+  const c = new Course(180, 318);
+  c.flat(300).checkpoint().hill(280, 70).flat(120)
+    .platform(80, -92, { id: 'lift-logic-a', width: 180,
+      motion: { kind: 'vertical-sine', amplitude: 70, period: 2.7 } });
+  c.dip(360, 96).ice(260).flat(150).checkpoint()
+    .platform(130, -126, { id: 'lift-logic-b', width: 150,
+      motion: { kind: 'lift', distance: 138, period: 3.5, direction: -1, phase: 0.25 } });
+  c.jump(260, 220, 78, 278, 222).flat(140).bouncy(150).whoops(4, 134, 24).checkpoint();
+  c.platform(150, -112, { id: 'lift-logic-c', width: 220,
+    motion: { kind: 'vertical-ping-pong', amplitude: 86, period: 3.1, phase: 0.5 } });
+  c.boost(220, 0.86).hill(320, 72).finish();
+  return { name: 'Lift Logic', world: 'R&D Yard', course: c, star: [22, 32, 46] };
+}
+
+function level15() { // Proof Circuit: a compact replay-friendly mixed-mechanic trial
+  const c = new Course(180, 316);
+  c.flat(260).checkpoint().boost(210, 0.8).jump(100, 210, 72, 260, 215).flat(120)
+    .platform(100, -108, { id: 'proof-shuttle', width: 190,
+      motion: { kind: 'horizontal-sine', amplitude: 92, period: 2.5, phase: 0.2 } });
+  c.flat(420).pendulum(70, 220, 142, 2.65, 0.25).flat(220).checkpoint();
+  c.ice(260).bouncy(150).jump(160, 220, 78, 280, 224, { pit: 'tnt' }).flat(130)
+    .platform(120, -118, { id: 'proof-lift', width: 170,
+      motion: { kind: 'lift', distance: 126, period: 3, direction: -1, phase: 0.4 } });
+  c.whoops(4, 134, 24).boost(190, 0.9).hill(320, 72).finish();
+  return { name: 'Proof Circuit', world: 'R&D Yard', course: c, star: [24, 35, 50] };
+}
+
 export function buildLevels() {
   return [level1(), level2(), level3(), level4(), level5(), level6(),
-    level7(), level8(), level9(), level10(), level11(), level12()];
+    level7(), level8(), level9(), level10(), level11(), level12(),
+    level13(), level14(), level15()];
 }

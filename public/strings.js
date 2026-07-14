@@ -24,6 +24,10 @@ export const STR = {
   flipsSaved: 'FLIP BONUS',
   newRecord: 'NEW RECORD!',
   retry: 'RETRY',
+  replay: 'REPLAY',
+  proofRecorded: 'PROOF RECORDED',
+  proofVerified: 'PROOF VERIFIED',
+  proofFailed: 'REPLAY DIVERGED',
   next: 'NEXT',
   menu: 'MENU',
   paused: 'PAUSED',
@@ -38,5 +42,7 @@ export const STR = {
   settings: 'SETTINGS', music: 'MUSIC', sfx: 'SFX', motion: 'REDUCED MOTION',
   haptics: 'VIBRATION', muteAll: 'MUTE ALL', on: 'ON', off: 'OFF', close: 'CLOSE',
   install: 'INSTALL', score: 'SCORE', bigAir: 'BIG AIR!', nearMiss: 'NEAR MISS!',
+  landingPerfect: 'PERFECT LANDING!', landingClean: 'CLEAN LANDING!',
+  landingRough: 'ROUGH LANDING', landingSlam: 'HARD SLAM',
   bestScore: 'BEST',
 };

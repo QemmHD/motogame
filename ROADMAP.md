@@ -12,16 +12,18 @@ Moto Rush X3 will become an original trail-racing anthology built around five id
 2. **Three-Lane Trails** — major set pieces aim to provide a forgiving route, a faster stunt line, and a discoverable Rush Route.
 3. **Bike-and-Rider Physicality** — suspension, tire contact, posture, engine load, landing quality, and crashes make the machine feel tangible.
 4. **Echo Competition** — personal-best ghosts, replay proofs, daily relays, and challenge links work without accounts or a game server.
-5. **Original Trail Anthology** — Canyon Run, Frostline Relay, Sunspill Coast, and Stormworks Foundry each receive their own machinery, color story, silhouettes, props, and music.
+5. **Original Trail Anthology** — Canyon Run, Stormworks, the three-course R&D Yard, Frostline Relay, Sunspill Coast, and Stormworks Foundry each receive their own machinery, color story, silhouettes, props, and music.
 
 The game may learn from broad genre conventions, but no update may decompile a competitor or copy proprietary code, art, audio, UI layouts, exact tracks, or timing data. All implementation and content must be original.
 
 ## Status legend
 
-- **RELEASE CANDIDATE** — implemented and verified on the current v1.3 branch; not claimed live until merged and deployed.
+- **RELEASE CANDIDATE** — implemented in the current candidate and covered by its release gate; not claimed live until merged, deployed, and production-smoke-tested.
 - **PARTIAL FOUNDATION** — part of the future update shipped early because later content depends on it.
 - **PLAYABLE PREVIEW** — a smaller version is playable, but the full acceptance gate is not complete.
 - **PLANNED** — scoped but not yet started.
+
+Statuses describe acceptance evidence, not how much code was written. A feature can be playable and heavily tested while its numbered update remains incomplete because manual, content, accessibility, or all-course proof gates are still open.
 
 ## Phase I — Make the foundation trustworthy
 
@@ -33,7 +35,9 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Ships:** One authoritative version/cache source; a real npm test command; asset-reference and service-worker precache auditing; finite-physics, route, hazard, and idle tests; nonzero failures; test-gated GitHub Pages publishing; visible build label.
 
-**Gate:** All 12 terrain routes and 12 hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
+**Gate:** All authored terrain routes and hazard-aware routes complete headlessly; no NaN or runaway speed; every public runtime file is cached; invalid JavaScript/JSON and broken local references fail CI; production version and cache version match.
+
+**Current evidence:** The v1.4 gate contains 3 asset/offline subtests, 28 deterministic system subtests, and a 15-level headless physics/rules route pass. Local browser smoke covers proof recording/playback, tap retry, moving ground, responsive layout, and an error-free console. Production URL and offline-update smoke evidence must still be recorded for the candidate actually deployed.
 
 ### U02 / v1.4 — Rules Core and Restart Contract
 
@@ -47,6 +51,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Restarting 50 times produces identical initial state; rules fixtures match browser behavior; keyboard, touch, and gamepad restart smoke tests pass; no previous-run hazard state survives.
 
+**Current evidence:** Fifty repeated full restarts and checkpoint restores reproduce their expected state in the rules suite. Checkpoints now snapshot tick, checkpoint index, and hazard runtime state; platforms reset to the restored tick. Browser input-device smoke coverage, complete reset ownership, and browser-module extraction remain open, so U02 stays partial.
+
 ### U03 / v1.5 — Smooth Ride Pass
 
 **Status:** PARTIAL FOUNDATION
@@ -58,6 +64,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 **Dependencies:** U01–U02.
 
 **Gate:** A fixed run produces the same tick hash; controls clear after pointer cancel, window blur, visibility loss, and rotation; hot-path object counts stay bounded; agreed mobile profile reaches p95 frame time below 16.7 ms.
+
+**Current evidence:** Replay tests reproduce a fixed physics finish tick and canonical state hash, and existing Pointer Event cleanup covers cancel/focus-loss paths in the browser client. Particle pooling, allocation instrumentation, rotation smoke evidence, and a measured mobile p95 budget remain open.
 
 ### U04 / v1.6 — Collision Keystone
 
@@ -71,11 +79,13 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Fast-mover fixtures cannot tunnel; dormant features leave baseline runs unchanged; one-way terrain does not trap the bike; inherited platform speed is bounded; debug contacts align with rendered geometry.
 
+**Current evidence:** Solid platform tops now pass high-speed swept-crossing, ten-cycle carry, exact reset, definition-immutability, and bounded-inheritance tests. Force zones, general moving chains, and an art/proxy debug-overlay review remain open, so the collision keystone is not accepted as complete.
+
 ## Phase II — Make every run satisfying
 
 ### U05 / v1.7 — Crash Theater
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Crashes become spectacular, readable, and quick instead of feeling like an abrupt state change.
 
@@ -85,9 +95,11 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Crash bodies never alter authoritative run state; 30 scripted crash types remain finite and settle on terrain; reduced motion removes zoom and slow motion while preserving clear feedback.
 
+**Current evidence:** The DOM-free crash simulation is presentation-only; 30 scripted crashes stay finite and settle, a repeated script is exact, and reduced motion returns a static non-simulating pose. The integrated renderer, terrain/platform contact, and camera handoff are playable. Final authored rider-part art, full browser crash matrix, and presentation tuning remain open.
+
 ### U06 / v1.8 — Fast Failure, Great Finish
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Retry is nearly instant and a successful finish clearly celebrates time, stars, flips, and personal bests.
 
@@ -97,9 +109,11 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Every mutable subsystem resets; finish arithmetic is exact; Next cannot select locked or missing content; keyboard, touch, and gamepad can retry and advance.
 
+**Current evidence:** Crash retry, explicit level restart, star/time/score results, PB messaging, Replay, Next, and Menu flows are integrated. Full mutable-subsystem auditing and the keyboard/touch/gamepad results-flow smoke matrix remain open.
+
 ### U07 / v1.9 — Landing Grade and Engine Soul
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Clean landings preserve speed, rough ones scrub it visibly, wheelies communicate balance, and engine sound reacts to load.
 
@@ -108,6 +122,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 **Dependencies:** U01–U06.
 
 **Gate:** Physics version is bumped; jump, braking, and landing envelopes are measured; old untagged terrain remains completable; maximum simultaneous audio does not clip.
+
+**Current evidence:** `physics-3` adds perfect/clean/rough/slam grades and momentum retention; the HUD and procedural engine expose five load-sensitive gear bands with shift and landing audio. The wheelie meter, tire/surface audio layers, measured envelopes, and clipping budget remain open.
 
 ### U08 / v2.0 — Machine Conductor
 
@@ -123,7 +139,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 ### U09 / v2.1 — Run Tapes and Proof Replays
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Replay the last run and trust that reference times came from a real, reproducible ride.
 
@@ -133,11 +149,13 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Replaying every tape repeatedly yields the same finish tick and hash; incompatible versions fail with a clear message; every campaign course has a passing tape.
 
+**Current evidence:** Normal finishes record compact RLE input, persist the last tape by level, and verify playback using finish tick plus a canonical final-state hash. Unit coverage includes restart bits, malformed/oversized data, version mismatch, random tick lookup, and a reproduced physics finish. Repository-owned golden tapes for all 15 courses, repeated browser playback, and player-facing stale-tape messaging remain open.
+
 ## Phase III — Build the machine sandbox
 
 ### U10 / v2.2 — Moving Ground
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Lifts, freight platforms, oscillating ledges, and apex-launch shortcuts make the ground itself part of the stunt.
 
@@ -146,6 +164,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 **Dependencies:** U04, U08–U09.
 
 **Gate:** An idle rider stays stable for ten platform cycles; inherited velocity is clamped; safe and apex routes both have golden tapes.
+
+**Current evidence:** Axis-aligned solid decks pass idle-circle and full-bike ten-cycle carry, swept landing, bounded carry/launch inheritance, deterministic pose, and exact reset tests. Freight Flight, Lift Logic, and Proof Circuit use them in recoverable layouts. Trigger-controlled lifts, broader moving geometry, dedicated camera cues, and golden safe/apex tapes remain open.
 
 ### U11 / v2.3 — Nitro Chain Reactions
 
@@ -194,6 +214,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 **Dependencies:** U08–U13.
 
 **Gate:** Twelve golden tapes; safe and risky routes manually verified; checkpoints precede lethal tests; three-star times derive from recorded rides; onboarding assumes no genre knowledge.
+
+**Current evidence:** The original 12 courses remain headlessly completable and now sit beside a separate three-course R&D Yard. This does not satisfy U14: golden tapes, recorded star derivation, and human safe/risky-route and onboarding QA are still missing.
 
 ### U15 / v2.7 — Closed-Course Geometry
 
@@ -245,7 +267,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Completion—not star count—unlocks the next level; old saves migrate without data loss; keyboard, touch, and gamepad navigation pass.
 
-### U19 / v3.1 — Frostline Relay, L13–L18
+### U19 / v3.1 — Frostline Relay, L16–L21
 
 **Status:** PLANNED
 
@@ -257,7 +279,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Six golden tapes; no mandatory stopping zone is pure ice; every proxy matches art; pack stays inside frame and asset budgets.
 
-### U20 / v3.2 — Sunspill Coast, L19–L24
+### U20 / v3.2 — Sunspill Coast, L22–L27
 
 **Status:** PLANNED
 
@@ -319,6 +341,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Ghost and authoritative replay converge at every checkpoint; physics mismatch hides the ghost safely; pruning preserves best records.
 
+**Current evidence:** The v1.4 tape format, one-tape-per-level persistence, fixed-tick playback, and mismatch rejection are reusable foundations. There is no translucent ghost, PB-only selection, split comparison, or storage pruning yet, so U24 remains planned.
+
 ### U25 / v3.7 — Daily Relay Run
 
 **Status:** PLANNED
@@ -333,7 +357,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 ### U26 / v3.8 — Challenge Links
 
-**Status:** PLANNED
+**Status:** PARTIAL FOUNDATION
 
 **Player promise:** Share a compact run link and let a friend race its verified Echo.
 
@@ -343,11 +367,13 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Malformed or oversized input is rejected; a typical link stays under 2 KB; version mismatch is explicit; decoded runs pass the standard verifier.
 
+**Current evidence:** The tape codec already uses URL-safe base64, strict canonical fields and ranges, hard size caps, RLE input, and explicit compatibility results. No URL-fragment import/export, shared challenge UX, Echo race, typical-link budget fixture, or decoded all-course verifier exists yet.
+
 ## Phase VI — Ship the definitive edition
 
 ### U27 / v3.9 — Mobile and Accessibility Pass
 
-**Status:** PLANNED
+**Status:** PLAYABLE PREVIEW
 
 **Player promise:** Comfortable controls and readable hazards across small phones, tablets, desktop, reduced motion, and high contrast.
 
@@ -356,6 +382,8 @@ The game may learn from broad genre conventions, but no update may decompile a c
 **Dependencies:** U03, U06.
 
 **Gate:** Layout matrix from 320×568 through tablet passes; all focus-loss paths release controls; contrast/reduced-motion audit passes; touch, keyboard, and gamepad smoke tests pass.
+
+**Current evidence:** Responsive touch controls, Pointer Event cancellation, focus-loss cleanup, haptics toggle, system-aware reduced motion, static reduced-motion crashes, and scalable menus are playable. Remapping, left-handed controls, high contrast, safe-area and minimum-target measurement, and the full device/input matrix remain open.
 
 ### U28 / v4.0 — Fast Boot and Distribution
 
@@ -369,7 +397,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Gate:** Initial payload stays below the agreed 2 MB target; interactive in under five seconds on the test 4G profile; second launch works offline; packaged content matches Pages.
 
-### U29 / v4.1 — Stormworks Foundry, L25–L30
+### U29 / v4.1 — Stormworks Foundry, L28–L33
 
 **Status:** PLANNED
 
@@ -379,7 +407,7 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 **Dependencies:** U08–U20, U28.
 
-**Gate:** Six golden tapes and all 30 campaign tapes pass; no physics-version bump; every prop has art/proxy overlay QA; finale routes are manually verified.
+**Gate:** Six golden tapes and all 33 authored course tapes pass; no physics-version bump; every prop has art/proxy overlay QA; finale routes are manually verified.
 
 ### U30 / v4.2 — Trail Forge
 
@@ -395,13 +423,15 @@ The game may learn from broad genre conventions, but no update may decompile a c
 
 ## Immediate execution queue
 
-After the v1.3 release candidate is reviewed and merged:
+After the v1.4 Proof & Platforms candidate reaches a stable final diff:
 
-1. Finish U02 by extracting remaining run-state/UI ownership and adding the 50-restart test.
-2. Finish U03 with pools, frame instrumentation, a recorded mobile budget, and canonical tick hashes.
-3. Finish U04 with kinematic platforms, surface velocity, force zones, and collision debug overlays.
-4. Produce U05 original rider-part concepts and collision silhouettes while engineering closes U02–U04.
-5. Record human reference runs for all 12 current courses and recalibrate star times before calling U14 complete.
+1. Run the complete 3-asset / 28-system / 15-level gate, finish the remaining input/accessibility smoke matrix, deploy, and verify the production cache and visible `v1.4.0` label.
+2. Finish U02 with browser restart parity, explicit reset ownership for every presentation subsystem, and smaller orchestration modules.
+3. Finish U03 with pools, allocation/frame instrumentation, rotation tests, and a measured mobile p95 budget.
+4. Finish U04/U10 with force zones, collision proxy overlays, triggered platforms, camera cues, and safe/apex proof tapes.
+5. Finish U05/U07 presentation acceptance with original rider-part polish, browser crash coverage, wheelie feedback, surface/tire sound, landing envelopes, and an audio clipping budget.
+6. Record repository-owned golden tapes and human keyboard/touch reference runs for all 15 courses; derive star targets and document safe, stunt, and recovery routes.
+7. Build PB Echoes and challenge links on the proven tape format only after golden replay stability is demonstrated across the campaign.
 
 ## Update discipline
 

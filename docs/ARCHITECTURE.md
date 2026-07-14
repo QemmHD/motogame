@@ -1,6 +1,6 @@
 # Moto Rush X3 Architecture
 
-This document describes the `v1.3.0` release-candidate architecture as it exists on 2026-07-13. The game is a static, framework-free Canvas 2D application. `public/` is the complete deployment boundary.
+This document describes the `v1.4.0` Proof & Platforms release-candidate architecture as it exists on 2026-07-13. The game is a static, framework-free Canvas 2D application. `public/` is the complete deployment boundary.
 
 ## Runtime map
 
@@ -8,21 +8,27 @@ This document describes the `v1.3.0` release-candidate architecture as it exists
 | --- | --- |
 | `public/index.html` | Canvas shell, mobile/PWA metadata, build metadata bootstrap, game-module load, and service-worker registration. The `?dev` flag deliberately skips service-worker registration. |
 | `public/version.js` | Single runtime release and offline-cache version. Exposes frozen `globalThis.MOTO_RUSH_BUILD`. |
-| `public/game.js` | Browser orchestration: asset loading, input, audio, save data, menus, run lifecycle, scoring, effects, camera, Canvas rendering, and the animation loop. |
-| `public/levels.js` | `Course` builder DSL and the 12 authored level definitions in the Canyon Run and Stormworks worlds. |
-| `public/physics.js` | DOM-free terrain and bike simulation, collision response, surface behavior, landing/flip signals, safety limits, and impulses. |
-| `public/rules.js` | DOM-free per-run state, tick-derived hazard motion, swept hazard checks, TNT behavior, checkpoints, near misses, and finish events. |
+| `public/game.js` | Browser orchestration: asset loading, input, audio, save data, menus, run/replay lifecycle, scoring, effects, crash presentation, camera, Canvas rendering, and the animation loop. |
+| `public/levels.js` | `Course` builder DSL, `course-2` compatibility identity, and 15 authored definitions across Canyon Run, Stormworks, and R&D Yard. |
+| `public/physics.js` | DOM-free `physics-3` terrain/bike simulation, collision response, platform integration, surface behavior, landing grades/retention, flip signals, safety limits, and impulses. |
+| `public/rules.js` | DOM-free per-run state, deterministic full/checkpoint reset, tick-derived hazard motion, swept hazard checks, TNT behavior, checkpoints, near misses, and finish events. |
+| `public/kinematics.js` | DOM-free immutable moving-ground definitions, fixed-tick poses, runtime reset, render sampling, swept one-way platform contact, carry, and bounded launch inheritance. |
+| `public/replay.js` | DOM-free fixed-tick input tapes, RLE compression, strict base64url codec, deterministic state hashing, compatibility checks, and random-access playback. |
+| `public/ragdoll.js` | DOM-free fixed-step crash-theater simulation, segmented bike/rider constraints, terrain contact, finite settling, reduced-motion pose, and detached render snapshots. |
 | `public/strings.js` | Player-facing interface strings. |
 | `public/logic.js` | Minimal generic game-host compatibility surface. It is currently a stub and is not the Moto Rush simulation. |
 | `public/sw.js` | Versioned cache-first service worker and atomic runtime precache. |
 | `public/manifest.json` | Installable web-app metadata and icons. |
 | `public/assets/` | Runtime art, icons, textures, and music. |
 | `tools/verify-public-assets.mjs` | Release verifier for syntax, JSON, local references, release metadata, and complete offline coverage. |
-| `tools/rules.test.mjs` | Deterministic rules, collision metadata, terrain-mask, and TNT unit tests. |
-| `tools/test-physics.mjs` | Asserted 12-level headless completion and stability gate. |
+| `tools/rules.test.mjs` | Deterministic rules, collision metadata, terrain-mask, TNT, and repeated restart/checkpoint tests. |
+| `tools/replay.test.mjs` | Replay roundtrip, RLE, restart-bit, lookup, hash, malformed/size/version, and physics-finish reproduction tests. |
+| `tools/kinematics.test.mjs` | Moving-ground pose, immutability, carry, swept crossing, bounded inheritance, reset, and full-bike stability tests. |
+| `tools/ragdoll.test.mjs` | Thirty-crash finite/settle fixture, exact repeat, and reduced-motion tests. |
+| `tools/test-physics.mjs` | Asserted 15-level headless completion, checkpoint recovery, and stability gate. |
 | `.github/workflows/pages.yml` | Runs the release gate, then publishes the `public/` subtree to `gh-pages` for eligible pushes or a manual dispatch. |
 
-Keep simulation behavior in `physics.js` or `rules.js` when it can remain independent of the DOM. `game.js` should consume simulation signals and turn them into presentation, sound, score, persistence, and state transitions.
+Keep simulation behavior in `physics.js`, `rules.js`, `kinematics.js`, `replay.js`, or `ragdoll.js` when it can remain independent of the DOM. `game.js` should consume simulation signals and turn them into presentation, sound, score, persistence, and state transitions. Ragdoll state is deterministic presentation but is deliberately not authoritative run state.
 
 ## Fixed-step data flow
 
@@ -30,15 +36,16 @@ The browser paints with `requestAnimationFrame`, but game state advances in fixe
 
 1. `version.js` initializes the build label and cache name before the ES modules load.
 2. `game.js` loads assets and builds all level definitions once with `buildLevels()`.
-3. `startLevel()` converts the selected course chains into bucketed terrain with `buildTerrain()`, creates a fresh bike with `createBike()`, and clones immutable hazard definitions into a fresh `createRunState()` result.
+3. `startLevel()` converts course chains into bucketed terrain, creates fresh rules, kinematics, and bike state, then either validates a supplied last-run tape or creates a recorder tagged with level/build/physics/course compatibility metadata.
 4. Each animation frame clamps a long wall-clock gap to 100 ms, applies the current slow-motion multiplier, and adds the result to an accumulator.
 5. While the accumulator contains at least one `1 / 60` second step, `simulate(STEP)` runs for active play or crash states. Particles and the camera also update on this fixed cadence.
-6. `simulate()` reads keyboard, pointer, gamepad, or development-autoplay input and calls `stepBike()` first.
-7. The updated bike is passed to `stepRunRules()`. Rules advance the run tick, move hazards, perform swept collision checks, update checkpoints, and emit plain event data.
-8. `game.js` consumes those events to trigger crash/finish state changes, scoring, popups, sound, haptics, particles, and TNT effects.
-9. Rendering reads the resulting state but does not advance the physics or rule tick.
+6. `simulate()` reads keyboard, pointer, development-autoplay, or replay input. A normal run records that snapshot exactly once; replay mode reads the mask for the same integer replay tick.
+7. Kinematic platforms advance first. `stepBike()` then advances terrain physics, and `resolveBikePlatforms()` resolves the updated wheels/frame against the current and previous platform poses.
+8. The bike is passed to `stepRunRules()`. Rules advance their tick, move hazards, perform swept collision checks, update checkpoints/snapshots, and emit plain event data.
+9. `game.js` consumes platform contacts and rules events to drive gear/landing feedback, scoring, checkpoint state, crash/finish transitions, sound, haptics, particles, and TNT effects.
+10. A crash creates a separate ragdoll snapshot and advances it during the short crash state. A finish finalizes or verifies the replay proof. Rendering reads all resulting state but does not advance authoritative bike/rules/platform ticks.
 
-Hitstop intentionally renders without advancing the fixed simulation. Slow motion changes how quickly fixed ticks are consumed relative to wall-clock time; it does not change the fixed simulation step. Hazard movement is derived from `run.tick`, not `performance.now()`, so equal starting state and inputs produce equal hazard positions.
+Hitstop intentionally renders without advancing the fixed simulation. Slow motion changes how quickly fixed ticks are consumed relative to wall-clock time; it does not change the fixed simulation step. Hazard and platform movement derive from integer simulation ticks, not `performance.now()`, so equal versioned starting state and inputs produce equal machine poses.
 
 ## Physics and collision model
 
@@ -64,7 +71,9 @@ Current surface responses are:
 | `boost` | Adds driven acceleration scaled by `surfaceStrength`. |
 | `bouncy` | Raises wheel restitution for a strong rebound. |
 
-Hard limits cap collision/constraint energy (`maxLinearSpeed`) and downward fall velocity (`maxFallSpeed`). `landingImpact`, `landedThisStep`, flip events, grounded flags, center velocity, speed, and forward speed are simulation outputs for the client to consume.
+Hard limits cap collision/constraint energy (`maxLinearSpeed`) and downward fall velocity (`maxFallSpeed`). `landingImpact`, `landingQuality`, `landingGrade`, `landingRetention`, `landedThisStep`, flip events, grounded flags, center velocity, speed, and forward speed are simulation outputs for the client to consume. Landing grades are authoritative physics results; score text, particles, haptics, camera response, and sound remain presentation.
+
+`resolveBikePlatforms()` is a separate post-bike step over the current kinematic run. It sweeps the previous/current wheel and head circles relative to each platform's previous/current rectangle, resolves valid one-way top crossings, writes bounded surface velocity into Verlet history, and includes wheel contact in grounded state. A head/frame hit can still crash the bike. This separation keeps the core terrain bucket format unchanged while moving-ground behavior matures.
 
 ## Content model
 
@@ -75,12 +84,13 @@ A `Course` is a turtle-style builder over one or more ground polylines. Curves a
 - `chains`: collidable terrain polylines;
 - `render`: ground data used by the renderer;
 - `hazards`: immutable hazard definitions;
+- `platforms`: immutable solid-deck definitions with dimensions, motion, surface, and render metadata;
 - `checkpoints`: checkpoint positions;
 - `decos`: non-simulation markers such as checkpoint art;
 - `finishX` and `finishPt`;
 - vertical bounds used by camera and fall-out logic.
 
-Builder methods cover flats, slopes, hills, dips, rises, falls, ramps, landings, bumps, whoops, gaps, complete jump assemblies, surfaces, hazards, checkpoints, and the finish. `jump()` can populate a pit with spikes, barrels, or TNT. Every playable level returns a name, world, course, and three ordered star-time thresholds.
+Builder methods cover flats, slopes, hills, dips, rises, falls, ramps, landings, bumps, whoops, gaps, complete jump assemblies, surfaces, hazards, solid platforms, checkpoints, and the finish. `jump()` can populate a pit with spikes, barrels, or TNT. Every playable level returns a name, world, course, and three ordered star-time thresholds.
 
 ### Surfaces
 
@@ -98,7 +108,31 @@ Supported motion is calculated at a fixed 60-tick rate:
 
 Hazard collision is swept between each bike node's previous/current position and each hazard's previous/current position. This reduces tunnelling when both objects move quickly. Saws, spikes, barrels, maces, and crushers currently resolve as lethal radius checks rather than solid kinematic terrain. TNT has a trigger radius and short fuse; its core is lethal, while its outer radius applies a launch impulse and emits an impulse event.
 
-The checkpoint list always begins with the course start. Progress advances when the bike passes checkpoint `x` coordinates. The finish event fires after the bike passes `finishX`; `game.js` accepts the finish only when the bike is not crashed.
+The checkpoint list always begins with the course start. Progress advances when the bike passes checkpoint `x` coordinates. Crossing a checkpoint captures `run.tick`, `cpIndex`, and cloned hazard runtime fields. `restoreCheckpointRunState()` reconstructs clean authored state and overlays that snapshot, so changes after the checkpoint never survive a retry. The finish event fires after the bike passes `finishX`; `game.js` accepts the finish only when the bike is not crashed.
+
+### Kinematic platforms
+
+Platform definitions are cloned, normalized, and deeply frozen when `createKinematicRun()` starts. Each runtime record keeps previous/current poses so collision can be relative and drawing can interpolate without mutating authoring data. Supported motion families are static, sine, ping-pong, lift, and piston aliases along one axis.
+
+Current solid geometry is intentionally narrow: an axis-aligned rectangle with a one-way top. It is enough for freight shuttles, elevators, recovery decks, stable carry, bounded apex launches, and rear-wheel gas/brake/reverse relative to deck velocity. Head sweeps remain lethal even when a wheel contacts the same deck. It is not yet arbitrary moving terrain, a rotated collider, a solid side/ceiling, or a general force zone. Visible deck dimensions must match the rectangle returned by `sampleKinematicPlatform()`.
+
+Full restart creates a fresh kinematic run at tick zero. Checkpoint retry calls `resetKinematicRun()` with the restored rules tick. This shared tick contract is required for a replay proof to reproduce moving ground.
+
+### Replay tapes and proofs
+
+Replay input is a five-bit mask (`gas`, `brake`, `lean left`, `lean right`, `restart`) sampled once per fixed game tick. Adjacent identical masks are stored as `[mask, count]` runs. The codec uses a compact fixed-key JSON object encoded as unpadded base64url; strict field, range, canonical-form, tick, run-count, byte, and token-length checks apply before untrusted data reaches playback.
+
+Every tape carries schema, level ID, build version, physics version, and course-generator version. `decodeReplay()` returns a structured `MALFORMED`, `TOO_LARGE`, or `INCOMPATIBLE_VERSION` result rather than throwing into game flow. `createReplayPlayback()` precomputes cumulative run ends and provides random `maskAt(tick)` / `inputAt(tick)` lookup. Manual crash respawn is queued and consumed on a fixed tick, so its restart bit reproduces the same checkpoint timing. The game treats reaching `finishTick` without a finish as divergence instead of continuing on neutral input indefinitely.
+
+At finish, `game.js` builds a quantized proof snapshot containing replay/rules ticks, checkpoint, elapsed time, score, flip bonus, bike state, hazard state, and platform poses. `hashReplayState()` sorts object keys and returns an eight-hex FNV-1a fingerprint. A normal finish is labeled **Proof Recorded**; **Proof Verified** appears only after playback matches both finish tick and final-state hash. The animation loop rechecks active state every catch-up tick so a completed recorder cannot receive another input. Camera, particles, random dust/exhaust, audio, and ragdoll presentation are excluded because they are not authoritative run state.
+
+Replay playback never updates unlocks, stars, best times, or best scores. One token per level currently lives in the local save. Golden repository tapes, PB ghosts, migrations, pruning, URL import/export, and challenge UX are future layers over this foundation.
+
+### Crash presentation
+
+`createRagdoll()` copies a bike snapshot into independent bike/rider nodes and constraints. `stepRagdoll()` advances at its own bounded `1 / 120` step and receives terrain contact through a callback, allowing the module to stay DOM-free. `readRagdoll()` returns a detached renderer-friendly pose so Canvas code cannot mutate the simulation accidentally.
+
+The ragdoll begins only after the authoritative run has failed and cannot change checkpoints, time, score, hazards, platforms, or replay proof. Dynamic terrain friction and contact counts apply once per physical substep rather than per solver iteration. A reduced-motion request creates a static pose, deterministically projects every part out of supplied terrain, and does not simulate. This presentation determinism is testable, but it is not included in run-proof hashes.
 
 ## Browser state and persistence
 
@@ -108,6 +142,7 @@ The browser client persists JSON under `localStorage` key `motoRushX3.save.v1`. 
 - best score by level;
 - best star count by level;
 - highest unlocked level;
+- one last completed replay token by level;
 - music, sound-effect, reduced-motion, and haptics settings;
 - mute state.
 
@@ -119,7 +154,7 @@ Pointer input supports multiple simultaneous pointers and clears each pointer on
 
 `public/version.js` is authoritative for both the menu label and service-worker cache identity. The service worker imports it, atomically adds the literal `PRECACHE` list during install, removes only stale caches with the Moto Rush prefix during activation, and uses cache-first fetches. Successful same-origin network responses may populate the cache at runtime. Query strings are ignored for cache matching.
 
-`tools/verify-public-assets.mjs` enforces that every runtime file under `public/` is explicitly precached, every literal local reference resolves, all public JavaScript parses, JSON is valid, the cache name derives from the single semantic version, and the precache contains only literal canonical paths. Additions to `public/` therefore require a matching `PRECACHE` entry.
+`tools/verify-public-assets.mjs` enforces that every runtime file under `public/` is explicitly precached, every literal local reference resolves, all public JavaScript parses, JSON is valid, the cache name derives from the single semantic version, and the precache contains only literal canonical paths. Replay, kinematics, ragdoll, rules, physics, levels, bike art, and music are asserted as critical dependencies. Additions to `public/` therefore require a matching `PRECACHE` entry.
 
 The Pages workflow runs `npm test` before publishing. On an eligible push to `main` or `claude/moto-x3m-bike-game-ipwi7p`, or on a manual workflow dispatch, it splits `public/` into a temporary branch and force-pushes that subtree to `gh-pages`. A push to another feature branch does not update production. Because the deployed root is the contents of `public/`, repository-relative paths outside `public/` are never available to the live game.
 
@@ -129,14 +164,18 @@ Preserve these rules when changing the game:
 
 1. Simulation uses a fixed `1 / 60` second step; wall-clock time must not directly drive course rules or hazard motion.
 2. `physics.js` and `rules.js` remain DOM-free and executable in Node tests.
-3. Course definitions, especially `course.hazards`, stay immutable during play; all mutable hazard state belongs to the run state.
-4. Positive `y` is down, and normal course ground is one-way from above.
-5. The configured wheel radius is both the collision radius and the visual radius.
-6. A run is not complete if the finish and a crash occur together.
-7. New public runtime files and local references must be present in the static service-worker precache.
-8. `public/version.js` contains the only runtime release-version literal and owns cache invalidation.
-9. Every level has a start, at least one valid route, a finish, and three star thresholds ordered fastest to slowest.
-10. A release must pass asset/offline checks, deterministic rule tests, all-level completion/stability tests, and a real browser smoke test.
+3. `kinematics.js`, `replay.js`, and `ragdoll.js` also remain DOM-free and executable in Node tests.
+4. Course definitions, especially `course.hazards` and `course.platforms`, stay immutable during play; mutable state belongs to a run object.
+5. Positive `y` is down, and normal course ground and platform tops are one-way from above.
+6. The configured wheel radius is both the collision radius and the visual radius.
+7. A run is not complete if the finish and a crash occur together.
+8. Full restart returns to authored tick-zero state; checkpoint retry returns to the captured rules/platform tick and hazard snapshot.
+9. Replay input is recorded/read once per fixed simulation tick. Playback cannot mutate progression, and proof hashes exclude non-authoritative presentation state.
+10. Schema, level, build, physics, and course versions must match before replay playback.
+11. New public runtime files and local references must be present in the static service-worker precache.
+12. `public/version.js` contains the only runtime release-version literal and owns cache invalidation.
+13. Every level has a start, at least one valid route, a finish, and three star thresholds ordered fastest to slowest.
+14. A release must pass asset/offline checks, all deterministic system tests, all-level completion/stability tests, and a real browser smoke test.
 
 ## Safe extension recipes
 
@@ -157,6 +196,15 @@ Preserve these rules when changing the game:
 5. Add a clear telegraph and renderer in `game.js`.
 6. Add deterministic unit coverage and an authored teaching setup before using the mechanic in a mixed gauntlet.
 
+### Add a kinematic platform
+
+1. Add immutable dimensions, motion, surface, and render fields through `Course.platform()`; give the platform a stable unique ID.
+2. Keep motion an integer-tick function in `kinematics.js`. Do not sample wall-clock time or mutate authored definitions.
+3. Make the rendered rectangle/support language agree with the sampled collision bounds.
+4. Define full-restart and checkpoint-restored tick behavior before adding triggers or persistent switches.
+5. Test high-speed crossing, idle carry, complete-bike carry, launch inheritance, exact reset, and immutability.
+6. Author a recoverable teaching route and record both safe and apex reference tapes before claiming the platform family complete.
+
 ### Add a surface
 
 1. Add a scoped `Course` helper that restores the previous surface after generating its segment.
@@ -170,3 +218,11 @@ Preserve these rules when changing the game:
 2. Add the exact literal path to `PRECACHE` in `public/sw.js`.
 3. If the deploy changes player-visible runtime behavior, bump `public/version.js` so installed clients receive a fresh cache.
 4. Run `npm test`, update the release records, and smoke-test once with `?dev` before testing the normal service-worker path.
+
+### Change proof-relevant simulation state
+
+1. Decide whether the change affects authoritative finish reproduction. If yes, bump `PHYSICS_VERSION` or `COURSE_VERSION` intentionally.
+2. Add required deterministic fields to `replayStateSnapshot()` in stable quantized form; never include camera, audio, particles, or wall-clock values.
+3. Keep old tokens incompatible unless a tested migration can genuinely reproduce their old semantics.
+4. Extend replay roundtrip, mismatch, malformed-data, and recorded-physics fixtures.
+5. Replay repository golden tapes after they exist; do not infer compatibility from a unit test alone.

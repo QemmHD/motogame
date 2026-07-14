@@ -2,95 +2,158 @@
 
 Last updated: **2026-07-13**
 
-This is the canonical pickup note for the current worktree. Update it whenever a development batch changes the build, roadmap status, known risks, or next priority.
+This is the canonical pickup note for the current worktree. Update it whenever a development batch changes the build, roadmap evidence, known risks, verification result, or next priority. Do not rely on chat history as project state.
 
 ## Release and repository coordinates
 
 | Item | Current value |
-| --- | --- |
+|---|---|
 | Product | Moto Rush X3 |
-| Runtime release candidate | `1.3.0` from `public/version.js` |
+| Runtime release candidate | `1.4.0` from `public/version.js` |
+| Package version | `1.4.0` |
+| Compatibility tags | Replay schema `1`; physics `physics-3`; course generator `course-2` |
 | Working branch | `agent/motorush-30-update-foundation` |
-| Branch start / current upstream base | `origin/claude/moto-x3m-bike-game-ipwi7p` at `d6243e6` before this uncommitted batch |
-| Default repository branch | `main` (`origin/main` currently contains only the initial repository state) |
+| Last committed branch state | `9a033cc` — v1.3 Stormworks foundation |
+| Current v1.4 state | Uncommitted Proof & Platforms work on top of `9a033cc` at the time of this handoff update |
+| Tracked upstream | `origin/agent/motorush-30-update-foundation` |
 | Production URL | <https://qemmhd.github.io/motogame/> |
 | Deployment branch | `gh-pages`, generated from `public/` |
 | Save key | `motoRushX3.save.v1` |
 
-`1.3.0` is a release candidate in this worktree, not a statement about the production URL. The current feature branch is not one of the automatic publish branches. Production changes only after this work is promoted to an eligible branch and the release-gate/publish workflow succeeds. Verify the live build label after deployment before marking `1.3.0` as production.
+`1.4.0` is a release candidate in this worktree, not a claim about production. This feature branch does not automatically publish. The candidate becomes production only after review/promotion to an eligible branch, a successful release-gate and Pages publish, and a smoke test of the canonical URL and offline update path.
 
-The npm package metadata and `public/version.js` both identify this candidate as `1.3.0`. `public/version.js` remains the authoritative runtime/cache source; package metadata is kept aligned for repository clarity.
+`public/version.js` remains authoritative for the visible runtime version and cache identity. `package.json` is aligned for repository tooling. Replay compatibility is intentionally stricter and also includes `PHYSICS_VERSION` from `public/physics.js` and `COURSE_VERSION` from `public/levels.js`.
 
 ## Current playable build
 
-The release candidate contains 12 handcrafted levels split across two menu worlds:
+The candidate contains **15 handcrafted levels across three menu worlds**:
 
-- **Canyon Run, levels 1-6:** Warm-Up, Air Time, Whoops & Woes, Danger Zone, Cliffhanger, and Grand Finale.
-- **Stormworks, levels 7-12:** Boostline, Pendulum Pass, Cold Circuit, Blast Foundry, Piston Works, and Stormbreak.
+- **Canyon Run, levels 1–6:** Warm-Up, Air Time, Whoops & Woes, Danger Zone, Cliffhanger, and Grand Finale.
+- **Stormworks, levels 7–12:** Boostline, Pendulum Pass, Cold Circuit, Blast Foundry, Piston Works, and Stormbreak.
+- **R&D Yard, levels 13–15:** Freight Flight, Lift Logic, and Proof Circuit.
 
-Progression unlocks levels sequentially and persists best time, score, stars, and settings locally. The client supports keyboard, pointer/multitouch, and gamepad-style input polling; checkpoint respawn, retry, pause, settings, audio, haptics, reduced motion, PWA installation, and offline play are present.
+R&D Yard is a focused three-course mechanics lab, not yet a six-course world pack. Freight Flight introduces horizontal freight decks above recovery ground. Lift Logic combines vertical decks with ice, bouncy terrain, and jumps. Proof Circuit is a compact mixed-system replay trial.
 
-## Shipped in the `1.3.0` release candidate
+Progression unlocks levels sequentially and persists best time, best score, stars, settings, and one last completed replay token per level. Keyboard and Pointer Event input, simultaneous touch, checkpoint retry, full restart, pause, settings, music/SFX, haptics, reduced motion, PWA installation, and offline play are present.
 
-These systems are implemented in the worktree and covered at least by automated regression checks or direct browser inspection:
+## Integrated in the `1.4.0` candidate
 
-- Shared build metadata and cache invalidation in `public/version.js`.
-- Atomic offline coverage verification for the full public runtime and its local references.
-- A test-before-publish GitHub Pages workflow with read-only tests and publish-only write permission.
-- A deterministic, DOM-free rules module with per-run hazard state.
-- Tick-derived moving saws, pendulums, and piston/crusher hazards.
-- Swept relative hazard collision to reduce fast-moving tunnelling.
-- TNT trigger/fuse logic with a lethal core and non-lethal outer launch impulse.
-- Checkpoint, finish, near-miss, explosion, and impulse event outputs.
-- Terrain contact metadata, runtime segment enable masks, degenerate-segment filtering, and allocation-light bucket deduplication.
-- One-way terrain with shallow underside recovery.
-- Dirt, ice, boost, and bouncy surface physics plus distinct rendered surface bands.
-- Separate horizontal and fall-speed safety limits, pre-depenetration landing impact capture, and stable bike center metrics.
-- Six new Stormworks courses, bringing the campaign to 12 levels.
-- Two-world menu paging and procedural presentation for the new machinery and TNT hazards.
-- Pointer-event multitouch with cancellation handling, focus-loss input clearing, and automatic pause on page hide.
-- Development launch flags for targeted and automated smoke tests.
+### Deterministic restart and checkpoint contract
 
-## Partial systems and known gaps
+- `createRunState()` owns fresh per-run rules and hazard state.
+- A full restart rebuilds the level, terrain, rules, platforms, bike, replay recorder/playback, score, effects, camera, and presentation state through `startLevel()`.
+- Every checkpoint captures rules tick, checkpoint index, and a cloned hazard runtime snapshot.
+- Checkpoint retry restores that snapshot; fuse, explosion, movement, and near-miss changes after the checkpoint do not survive.
+- Kinematic platforms reset to the restored rules tick, keeping moving ground aligned with the recovered hazard timeline.
+- The rules suite repeats full restart and checkpoint restoration 50 times and compares exact results.
 
-Treat the following as incomplete, even though foundations or previews exist:
+### Last-run replay proof
 
-- **Release status:** `1.3.0` has not been proven live until promotion, workflow success, and a production smoke test.
-- **Rules extraction:** course rules are separated, but `public/game.js` still combines input, audio, save data, run state, scoring, rendering, UI, and effects in one large module.
-- **Collision breadth:** moving hazards are swept radius hazards, not solid kinematic platforms. Crushers do not yet carry the bike, and there are no elevators, lifts, moving terrain, or general force-zone primitives.
-- **Breakables:** terrain segments can be enabled or disabled, but no player-facing fragile-ground system consumes that capability yet.
-- **Surface breadth:** ice, boost, and bouncy surfaces are implemented; mud, water, wind, currents, and richer per-surface audio/VFX are not.
-- **Crash presentation:** crashes use the current bike state and effects; there is no segmented rider ragdoll or authored crash theater.
-- **Competition:** there are no run tapes, ghosts, daily runs, shareable challenge links, or deterministic input replay files.
-- **Progression depth:** sequential unlocks, stars, best times, and best scores exist; garage cosmetics, records/badges, optional contracts, and collectibles do not.
-- **Content validation:** automated agents can finish all 12 routes, but the new star thresholds and hazard rhythms still need multiple human keyboard and touch runs. The test allows recovery crashes and is not a quality or difficulty rating.
-- **Presentation breadth:** Stormworks hazards and surfaces have clear procedural visuals, but the world still shares much of the existing environment art. Store-ready screenshots should be refreshed after final presentation tuning.
-- **Accessibility:** reduced motion, volume controls, haptics toggle, scalable layout, keyboard, and touch are present. Dedicated contrast options, remapping, left-handed layouts, and a complete accessibility audit are not.
-- **Browser gate:** the authoritative automated tests are Node-based. Visual, audio, touch, install, and service-worker behavior still require browser smoke testing.
-- **Package hygiene:** browser capture helpers depend on `playwright-core`, but those optional visual harnesses are not part of the authoritative CI test path and the repository does not yet contain a lockfile.
+- `public/replay.js` is DOM-free and defines one compact bitmask per fixed simulation tick: gas, brake, lean left, lean right, and restart. Manual crash respawns are queued on a simulation tick, recorded, and replayed; a full level restart intentionally starts a fresh proof attempt.
+- Adjacent identical masks use run-length encoding. Tokens are canonical unpadded base64url JSON with hard tick, run, byte, string, and encoded-length limits.
+- Metadata includes schema, level ID, build version, physics version, and course-generator version.
+- Finalization records finish tick and a stable FNV-1a hash of a sorted, deterministic final-state snapshot.
+- Normal completed runs persist one replay token per level. The results panel offers Replay, and course cards mark saved proofs.
+- Playback supplies input by tick and verifies both finish tick and final-state hash. Playback cannot overwrite progression or records.
+- Malformed, oversized, level-mismatched, or version-incompatible local tapes are rejected. The current game removes a rejected saved tape silently; player-facing incompatibility messaging is still missing.
+
+### Solid moving ground
+
+- `public/kinematics.js` keeps immutable authored platform definitions separate from runtime poses.
+- Authored paths support static, sine, ping-pong, lift, and piston-style movement at a fixed 60 Hz tick rate.
+- The collision primitive is an axis-aligned, one-way solid top with high-speed relative swept crossing.
+- Wheels remain planted and inherit bounded surface velocity; upward platform launch inheritance is separately bounded.
+- The complete bike can be carried for ten platform cycles in the deterministic suite.
+- `Course.platform()` supplies collision dimensions, motion, surface, and presentation metadata used by both simulation and drawing.
+- Current platforms are rectangular decks. Arbitrary moving terrain, rotation, triggered sequencing, general force zones, and dedicated camera behavior are not implemented.
+
+### Crash theater and reduced motion
+
+- `public/ragdoll.js` is a DOM-free, fixed-step, segmented bike-and-rider presentation simulation.
+- It uses bounded nodes, structural/tether constraints, terrain/platform contacts, sleep detection, and a finite lifetime.
+- Crash source direction seeds the presentation impulse; the camera can follow the detached pose while the authoritative run is already failed.
+- Reduced motion returns a static readable crash pose and avoids ragdoll stepping. The browser client also suppresses strong hitstop, flash, shake, and camera kick.
+- Tests cover 30 scripted finite/settling crashes, exact repeated simulation, and the static reduced-motion path.
+
+### Landing, engine, and finish feedback
+
+- `physics-3` emits perfect, clean, rough, and slam grades plus a momentum-retention value.
+- Meaningful landings receive grade messaging, score treatment, particles, haptics, camera response, and impact-scaled sound.
+- The procedural engine uses road speed, forward speed, throttle, grounding, and airborne load to drive pitch/filter/gain.
+- Five gear bands are visible on the HUD and use shift blips while accelerating on the ground.
+- The finish panel shows time, flip time reduction, score, stars, record state, proof status, and Replay/Next/Menu actions.
+
+### Storefront and pickup presentation
+
+- README presentation is updated for v1.4, 15 courses, honest candidate status, controls, tests, and remaining limits.
+- The screenshot gallery references `docs/update-v14-menu.png`, `docs/update-v14-platforms.png`, `docs/update-v14-crash.png`, `docs/update-v14-replay.png`, and `docs/update-v14-mobile.png`.
+- Before committing, verify all five gallery files exist, display the intended state, contain no debug overlays or private browser chrome, and render correctly on GitHub.
+
+## Roadmap evidence, not completion claims
+
+| Update | Current status | Evidence present | Acceptance still open |
+|---|---|---|---|
+| U01 Release Gate | Release candidate | 3 asset tests, 28 system tests, 15-level route gate, local desktop/mobile browser captures | Final deploy and production/offline smoke |
+| U02 Restart Contract | Partial foundation | 50-repeat rules restart/checkpoint fixture; exact hazard/tick snapshot restore | Full browser input parity, reset-ownership audit, smaller browser modules |
+| U03 Smooth Ride | Partial foundation | Canonical replay hash; Pointer Event/focus cleanup already integrated | Pools, allocation/frame metrics, rotation evidence, measured mobile p95 |
+| U04 Collision Keystone | Partial foundation | Solid swept moving decks, carry and bounded inheritance tests | Force zones, moving chains, art/proxy overlay audit |
+| U05 Crash Theater | Playable preview | Integrated deterministic ragdoll, 30 crash fixtures, reduced-motion pose | Final authored part art and browser crash/presentation matrix |
+| U06 Finish Flow | Playable preview | Fast retry, results, records, Replay/Next/Menu | Full subsystem-reset and device-navigation matrix |
+| U07 Engine Soul | Playable preview | Landing grades/retention, five gears, reactive engine and landing sound | Wheelie meter, tire/surface layers, measured envelopes/audio budget |
+| U09 Proof Replays | Playable preview | Last-run RLE tape, compatibility, finish/hash verification, physics replay fixture | Golden tapes for every level, repeated browser playback, mismatch UI |
+| U10 Moving Ground | Playable preview | Three levels, deterministic solid platforms, ten-cycle carry | Triggered lifts, broader shapes, camera cues, safe/apex golden tapes |
+| U14 12-Level Campaign | Playable preview | Original 12 routes remain headlessly completable | Human safe/risky QA, golden tapes, star-time derivation |
+| U26 Challenge Links | Partial foundation | URL-safe strict codec and compatibility result | Fragment import/export, shared race UX, under-2 KB fixture, verifier |
+| U27 Mobile/Accessibility | Playable preview | Responsive touch, cancellation cleanup, haptics, reduced motion | Remapping, left-hand mode, contrast, safe-area/target and device matrix |
+
+Do not promote these statuses merely because a foundation exists. The detailed acceptance gates in `ROADMAP.md` are authoritative.
+
+## Known gaps and risks
+
+- **Production status:** no v1.4 claim is valid until the live build label, a course from every world, a saved proof replay, service-worker update, and offline reload are checked on the canonical URL.
+- **Browser orchestration:** `public/game.js` still owns input, audio, save data, run lifecycle, scoring, effects, menus, rendering, replay integration, and the animation loop.
+- **Replay breadth:** only the last completed run is kept per level. There are no repository golden tapes, PB ghosts, splits, daily events, URL challenge import/export, tape migration, or storage pruning.
+- **Replay UX:** a stale or incompatible local tape is safely removed but not explained to the player.
+- **Replay snapshot scope:** proof hashes quantized authoritative bike/run/platform state, score, and elapsed data. Visual particles, random dust/exhaust, camera, audio, and ragdoll presentation are intentionally excluded.
+- **Platform breadth:** current collision is axis-aligned and top-only. Platforms do not rotate, follow arbitrary splines, act as walls/ceilings, trigger from switches, or replace general moving terrain.
+- **Crash presentation:** deterministic safety is tested in Node, but silhouette quality, camera framing, overlap, fast retry timing, and reduced-motion clarity need a browser matrix and human review.
+- **Landing/audio tuning:** landing grade thresholds and star targets need measured human runs. There is no wheelie meter, tire/surface sound set, or simultaneous-audio clipping budget.
+- **Content validation:** headless agents finish 15 levels, but may use recovery crashes and do not prove fun, route readability, fair stars, or touch difficulty. Stormbreak remains the noisiest simulated route.
+- **Presentation breadth:** R&D Yard uses procedural models and shared environment language. It does not yet have the final breadth of a six-level world pack.
+- **Accessibility:** reduced motion, scalable layout, keyboard, touch, volume, and haptics are present; high contrast, remapping, left-handed layout, explicit safe-area audit, and full assistive testing are not.
+- **Package hygiene:** `playwright-core` supports optional capture helpers, but the repository still has no lockfile and visual harnesses are not part of authoritative CI.
 
 ## Verification commands
 
-Run from the repository root with Node.js 22-compatible tooling.
+Run from the repository root with Node.js 22-compatible tooling:
 
 ```powershell
 npm test
 ```
 
-That command is the authoritative local release gate and runs, in order:
+The authoritative gate runs, in order:
 
 ```powershell
 npm run test:assets
-npm run test:rules
+npm run test:systems
 npm run test:physics
 ```
 
-Individual purposes:
+Focused system commands are also available:
 
-- `npm run test:assets` validates runtime JavaScript/JSON, build metadata, every local reference, and complete literal precache coverage.
-- `npm run test:rules` checks deterministic motion without level mutation, one-way contact recovery, the terrain enable mask, surface metadata, and TNT fuse/impulse behavior.
-- `npm run test:physics` asserts at least 12 levels, terrain-only full-throttle completion, smart rules/hazard completion, finite simulation state, speed bounds, crash-loop bounds, and stable idle settling.
-- `npm run verify:assets` prints the asset/offline verification report without the Node test wrapper.
+```powershell
+npm run test:rules
+npm run test:replay
+npm run test:kinematics
+npm run test:ragdoll
+```
+
+Current coverage:
+
+- `test:assets`: **3 subtests** for complete runtime/offline validity, critical dependencies, and literal precache enforcement.
+- `test:systems`: **28 subtests** — rules/restarts 5, replay 9, kinematics 9, ragdoll 5.
+- `test:physics`: **15 authored levels** through terrain-only and hazard-aware completion, checkpoint restore, finite-state, speed, crash-loop, and idle-settle assertions.
+- `verify:assets`: report-only form of the public asset/offline audit.
 
 Before committing, also run:
 
@@ -99,7 +162,7 @@ git diff --check
 git status -sb
 ```
 
-For a manual smoke test, serve `public/` over HTTP rather than opening `index.html` directly:
+For manual QA, serve `public/` over HTTP:
 
 ```powershell
 python -m http.server 8080 --directory public
@@ -107,42 +170,48 @@ python -m http.server 8080 --directory public
 
 Useful local routes:
 
-- `http://127.0.0.1:8080/?dev` - disables service-worker registration and shows development stats.
-- `http://127.0.0.1:8080/?dev&level=8` - launches a specific one-based level directly.
-- `http://127.0.0.1:8080/?dev&level=8&autoplay` - launches the simple development driver.
-- `http://127.0.0.1:8080/?dev&touch` - forces touch controls for layout inspection.
-
-The development autoplay is a smoke aid, not a gameplay bot or quality benchmark.
+- `http://127.0.0.1:8080/?dev` — uncached development menu and statistics.
+- `http://127.0.0.1:8080/?dev&level=13` — Freight Flight.
+- `http://127.0.0.1:8080/?dev&level=14` — Lift Logic.
+- `http://127.0.0.1:8080/?dev&level=15` — Proof Circuit.
+- `http://127.0.0.1:8080/?dev&level=15&autoplay` — development smoke input, not a quality bot.
+- `http://127.0.0.1:8080/?dev&touch` — forced touch layout.
 
 ## Last known release-gate result
 
-The full `npm test` suite passed during this development batch after the core physics, rules, content, and offline changes. Subsequent code or asset edits must invalidate that statement until the suite is run again. The physics gate's last reported smart-route recovery counts remained below its limit for every level, with no non-finite state and all 12 finishes reached.
+`npm test` passed on **2026-07-13** against the integrated v1.4 code present while this document was updated:
 
-Do not copy old console output into a new handoff as proof. Record the command and fresh result in the commit or pull request after the final worktree state is tested.
+- assets/offline: **3 passed, 0 failed**;
+- deterministic systems: **28 passed, 0 failed**;
+- physics/rules route gate: **15 of 15 levels finished**, with finite state and bounded speeds.
+
+Local browser smoke on the same candidate recorded and replayed Freight Flight to an identical finish/hash, confirmed **Proof Recorded** versus **Proof Verified**, exercised canvas tap-to-respawn, inspected R&D Yard, moving-platform gameplay, crash theater, and a 390 × 844 responsive menu, and found no warning/error console entries. The five resulting PNGs are committed under `docs/` for update evidence.
+
+The reported smart route used recovery crashes on some courses, including 15 on Stormbreak, so this result is not evidence of balanced difficulty. Any subsequent code or public-asset edit invalidates this fresh-result statement until `npm test` is rerun. Documentation-only edits do not change the runtime result, but the final pull request should still record its own complete command output.
 
 ## Immediate next priorities
 
-1. **Close the `1.3.0` release candidate:** rerun the full gate on the final diff, complete desktop and touch smoke tests, confirm normal service-worker update behavior, and publish through the reviewed branch workflow.
-2. **Prove production:** open the canonical Pages URL after deployment, confirm the menu says `v1.3.0`, launch one Canyon Run and one Stormworks level, and verify a reload can start offline from the new cache.
-3. **Finish the restart contract:** stress retry and checkpoint respawn across all hazard types, especially active TNT and movers; specify whether hazard cycles reset or continue on checkpoint respawn and test that choice.
-4. **Reduce `game.js` coupling:** extract browser-neutral scoring/run-state helpers first, then isolate renderer/audio/input modules without changing the fixed-step order.
-5. **Add run tapes:** record fixed-tick input plus required version/course identity before building ghosts, daily runs, or challenge links.
-6. **Human-calibrate the 12-level campaign:** collect clean and recovery runs on keyboard and touch, adjust star thresholds and hazard phases, and document a golden completion time for each route.
-7. **Continue the roadmap in dependency order:** solid kinematic/moving-ground primitives before breakables and reactive props; richer progression and sharing only after deterministic run tapes are stable.
+1. **Promote and prove v1.4:** review the five captured screenshots and PR diff, finish reduced-motion/audio/install/offline input smoke, merge through the eligible branch, then verify the live cache/version.
+2. **Create all-course proofs:** record clean human reference runs for 15 levels, store repository golden tapes, replay each repeatedly, and derive documented star thresholds from those rides.
+3. **Close restart acceptance:** audit all mutable browser presentation state, test full restart and checkpoint retry through keyboard/touch/gamepad paths, and make incompatible replay removal visible.
+4. **Finish moving-ground acceptance:** add collision debug overlays, triggered lift state, camera cues, and golden safe/apex routes before claiming U10 complete.
+5. **Finish bike physicality:** measure landing envelopes, add wheelie balance feedback and tire/surface audio, and test simultaneous sound levels.
+6. **Reduce `game.js` coupling:** extract browser-neutral scoring/run lifecycle first, then isolate renderer, input, audio, replay persistence, and UI without changing fixed-step order.
+7. **Build competition in dependency order:** PB Echoes first; challenge fragment import/export only after all-course replay stability; daily generation after course and physics versions are stable.
 
 ## Future handoff and release checklist
 
-Every future development batch must leave the repository understandable without relying on chat history. Before pushing or handing off:
+Every future batch must leave the repository understandable without relying on chat history:
 
-- [ ] Update `CHANGELOG.md` with player-visible changes, technical changes, fixes, and the exact verification performed.
-- [ ] Update `ROADMAP.md` status markers: shipped, partial/preview, next, or planned. Do not mark a roadmap update complete because only one underlying primitive exists.
-- [ ] Update this `docs/PROJECT_STATE.md` date, branch/base, release status, shipped/partial systems, known gaps, test state, and immediate priorities.
-- [ ] Confirm `public/version.js`. Bump it for every deployed runtime or offline-content change so existing installations receive a new cache; do not add a second runtime version literal elsewhere.
+- [ ] Update `CHANGELOG.md` with player-visible work, technical changes, fixes, verification, and remaining gaps.
+- [ ] Update `ROADMAP.md` statuses using acceptance evidence. Do not mark an update complete because one primitive or one demo level exists.
+- [ ] Update this document's date, branch/commit coordinates, release state, playable content, known gaps, test state, and next pickup.
+- [ ] Change `public/version.js` and `package.json` together for deployed runtime changes; keep physics/course compatibility tags intentional.
 - [ ] Add every new `public/` runtime file to the literal `PRECACHE` array in `public/sw.js`.
-- [ ] Add or update deterministic unit/regression coverage for each changed mechanic and level assumption.
-- [ ] Run `npm test` from the final worktree and record the fresh result. Also run `git diff --check`.
-- [ ] Smoke-test desktop keyboard, touch/multitouch cancellation, checkpoint respawn, retry, pause/focus loss, audio settings, and at least one level from each affected world.
-- [ ] Test both `?dev` (uncached) and the normal service-worker route when cache or asset behavior changes.
-- [ ] Refresh README/store screenshots when the visible menu, world art, bike, hazards, or major effects change.
-- [ ] Keep new mechanics, art, level layouts, names, and presentation original. Inspiration is not authorization to copy proprietary source, assets, or exact course geometry.
-- [ ] In the commit or pull request, state whether the branch is only a release candidate or has been verified on the production URL.
+- [ ] Add deterministic regression coverage for every new rule, reset owner, collider, surface, hazard, replay field, save field, or level assumption.
+- [ ] Run `npm test` and `git diff --check` from the final worktree and record fresh results in the commit or pull request.
+- [ ] Smoke-test desktop keyboard, simultaneous touch and cancellation, checkpoint retry, full restart, replay, pause/focus loss, reduced motion, audio settings, and at least one level from every affected world.
+- [ ] Test both `?dev` and the normal service-worker route whenever cache or runtime assets change.
+- [ ] Verify README screenshots exist, are current, contain no debug/private UI, and render on GitHub.
+- [ ] Keep mechanics, art, level layouts, names, and presentation original. Inspiration is not authorization to copy proprietary source, assets, or exact geometry.
+- [ ] State clearly whether the branch is a candidate or has been verified on the production URL.

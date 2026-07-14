@@ -1,13 +1,17 @@
 {
   "name": "motorush-x3",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "An original momentum-driven 2D stunt racing PWA.",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:assets && npm run test:rules && npm run test:physics",
+    "test": "npm run test:assets && npm run test:systems && npm run test:physics",
     "test:assets": "node --test tools/verify-public-assets.test.mjs",
+    "test:systems": "node --test tools/rules.test.mjs tools/replay.test.mjs tools/kinematics.test.mjs tools/ragdoll.test.mjs",
     "test:rules": "node --test tools/rules.test.mjs",
+    "test:replay": "node --test tools/replay.test.mjs",
+    "test:kinematics": "node --test tools/kinematics.test.mjs",
+    "test:ragdoll": "node --test tools/ragdoll.test.mjs",
     "test:physics": "node tools/test-physics.mjs",
     "verify:assets": "node tools/verify-public-assets.mjs"
   },
