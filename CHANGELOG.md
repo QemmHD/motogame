@@ -29,6 +29,7 @@ This candidate completes U06 with the original **Finish Forge** run receipt, exa
 
 ### Fixed
 
+- The hosted ordinary-play gate now gives shared runners up to 24 seconds after the mandatory three-second measurement to reach the unchanged 180-callback minimum; strict 8/12 ms callback-work budgets remain unchanged.
 - A held gameplay throttle or gamepad A press can no longer auto-dismiss a newly opened results screen.
 - A missing player proof cannot trigger Replay, and a missing, locked, final, or malformed next route cannot start or clamp to the wrong course.
 - Disabled actions are skipped by keyboard/gamepad focus wrap and are absent from Canvas hit targets while remaining exposed as disabled in the semantic dialog.

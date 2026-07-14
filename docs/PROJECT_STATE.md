@@ -149,7 +149,7 @@ The rendering audit also removed avoidable allocations and excess work from the 
 
 ### Performance and interruption browser gate
 
-`tools/performance-browser.mjs` starts the local static deployment boundary, launches an installed Chrome/Chromium, blocks service workers, captures three seconds of live autoplay after warm-up, rejects page/console errors, validates pool bounds, and runs two named profiles:
+`tools/performance-browser.mjs` starts the local static deployment boundary, launches an installed Chrome/Chromium, blocks service workers, captures at least three seconds of live autoplay after warm-up and waits up to 24 more seconds when needed to collect 180 callbacks, rejects page/console errors, validates pool bounds, and runs two named profiles:
 
 The current v1.8.1 local gate used Chrome 150 and recorded ordinary play, preserved live-crash regression, and strict Finish Forge profiles:
 

@@ -143,7 +143,7 @@ Both hosted runs keep synchronous work close to their local references while pac
 4. Opens Cliffhanger (level 5) with development capture, touch, and autoplay flags. Its clean reference route remains active throughout the hosted runner's observed sample window.
 5. Captures page and console errors across measurement and the complete interaction matrix.
 6. Warms the runtime for 750 ms, then resets the runtime telemetry and harness probe together.
-7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 12 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.
+7. Measures for at least 3 seconds. If the host has not produced 180 frames, it waits up to 24 more seconds for the same target; a timeout still produces the measured snapshot and an actionable failure.
 8. Prints browser version plus complete work and pacing diagnostics before assertions, requires matching probe/runtime sample counts, active play, at least 60 fixed ticks, and nonzero pooled-effect activity.
 9. Requires main-loop work p95 to remain below the profile budget while retaining pacing p95 as a diagnostic.
 10. Validates that active/created/peak effects stay within each fixed pool capacity.
